@@ -39,7 +39,7 @@ mine <- function(data, response_var, model_func = lm,
       for (i in 1:(max_k - 1)) {
         if (i + 1 <= length(predictor_vars)) {
           interact_terms <- combn(predictor_vars, i + 1, function(vars) {
-            paste(vars, collapse = ":")
+            paste(vars, collapse = "*")# trying with * instead of :
           })
           terms <- c(terms, interact_terms)
         }
@@ -92,7 +92,7 @@ mine <- function(data, response_var, model_func = lm,
       }
       if(current_metric == metric_comparison(results$Metric)) {
         keep_going <- FALSE
-        print(current_metric)
+        # print(current_metric)
       } else {
         # print("keep going")
         current_metric <- metric_comparison(results$Metric)
