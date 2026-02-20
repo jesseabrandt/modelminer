@@ -8,18 +8,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Commands
 
-All commands run from R or the R console. Load the package interactively during development with:
+`devtools` cannot be installed in this container (its dependencies `ragg` and
+`gert` need system libraries `libharfbuzz-dev`, `libfribidi-dev`, `libgit2-dev`
+that are not available). Use the underlying packages directly instead:
 
 ```r
-devtools::load_all()    # Load all R/ functions without installing
-devtools::document()    # Regenerate NAMESPACE and man/ from roxygen2 comments
-devtools::test()        # Run all tests
-devtools::check()       # Full R CMD CHECK
+pkgload::load_all()          # Load all R/ functions without installing
+roxygen2::roxygenise()       # Regenerate NAMESPACE and man/ from roxygen2 comments
+testthat::test_dir("tests/testthat")   # Run all tests
+rcmdcheck::rcmdcheck()       # Full R CMD CHECK
 ```
 
 Run a single test file:
 ```r
 testthat::test_file("tests/testthat/test-mine.R")
+```
+
+From the shell (useful for CI or the /r-test skill):
+```bash
+Rscript -e "pkgload::load_all(quiet=TRUE); testthat::test_dir('tests/testthat', reporter='check')"
 ```
 
 ## Architecture
