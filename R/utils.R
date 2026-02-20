@@ -1,3 +1,14 @@
+# Build a formula from response_str and a character vector of terms.
+# terms may use * notation (interactions with main effects) or bare names.
+# When terms is empty the formula is response ~ 1.
+.build_formula <- function(response_str, terms) {
+  if (length(terms) == 0) {
+    as.formula(paste(response_str, "~ 1"))
+  } else {
+    as.formula(paste(response_str, "~", paste(terms, collapse = " + ")))
+  }
+}
+
 #' @importFrom stats model.matrix
 # this function is used inside formula_wrap
 to_xy <- function(data, formula) {
