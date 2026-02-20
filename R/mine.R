@@ -80,13 +80,15 @@ mine <- function(data, response_var, model_func = lm,
     }
   }
 
-  # Interaction terms — * rather than : so adding one term also brings in main
-  # effects. See CLAUDE.md for the design trade-off.
+  # Interaction terms use : (interaction only, no implicit main effects).
+  # Main effects are separate candidates, so the search adds them independently
+  # — one term per step. This keeps greedy/forward-backward strict and makes
+  # term tracking in added_terms unambiguous.
   if (max_interact_vars > 1 && length(predictor_vars) >= 2) {
     max_k <- min(max_interact_vars, length(predictor_vars))
     for (i in seq_len(max_k - 1)) {
       interact_terms <- combn(predictor_vars, i + 1, function(vars) {
-        paste(vars, collapse = "*")
+        paste(vars, collapse = ":")
       })
       candidate_terms <- c(candidate_terms, interact_terms)
     }

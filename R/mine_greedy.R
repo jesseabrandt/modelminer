@@ -63,8 +63,7 @@
       current_formula <- as.formula(round_formulas[best_idx])
 
       used_terms      <- attr(stats::terms(current_formula), "term.labels")
-      used_terms_star <- gsub(":", "*", used_terms)
-      candidate_terms <- setdiff(candidate_terms, c(used_terms, used_terms_star))
+      candidate_terms <- setdiff(candidate_terms, used_terms)
     }
   }
 

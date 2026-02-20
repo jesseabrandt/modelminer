@@ -74,10 +74,9 @@
           current_formula <- as.formula(fwd_formulas[best_idx])
           current_metric  <- best_fwd
 
-          # Prune candidates: remove anything now covered by the expanded formula
+          # Prune candidates: remove anything now covered by the formula
           used            <- attr(stats::terms(current_formula), "term.labels")
-          used_star       <- gsub(":", "*", used)
-          candidate_terms <- setdiff(candidate_terms, c(used, used_star))
+          candidate_terms <- setdiff(candidate_terms, used)
           changed         <- TRUE
         }
       }

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Package Does
 
-`modelminer` is an R package that performs automated model building via greedy forward selection. Starting from an intercept-only (or all-first-order) model, it iteratively adds the single term—from polynomial expansions and interaction terms—that most improves a user-supplied metric (default: AIC).
+`modelminer` is an R package that performs automated model building via configurable stepwise selection. Starting from an intercept-only (or all-first-order) model, it iteratively adds (and optionally removes) terms—from polynomial expansions and interaction terms—that most improve a user-supplied metric (default: AIC).
 
 ## Development Commands
 
@@ -24,15 +24,29 @@ testthat::test_file("tests/testthat/test-mine.R")
 
 ## Architecture
 
-### Core Algorithm (`R/mine.R`)
+### Dispatcher (`R/mine.R`)
 
-`mine()` implements greedy forward stepwise selection:
-1. Builds a candidate term pool: first-order predictors + polynomial terms (`I(var^k)` up to `max_degree`) + interaction terms (all combinations up to `max_interact_vars` variables, using `*` so main effects are included).
-2. Starts from intercept-only or all-first-order formula depending on `keep_all_vars`.
-3. Each iteration evaluates every candidate term added to the current formula, picks the best by `metric_comparison` (default `min` for AIC), updates the formula, removes used terms, and repeats until no improvement.
+`mine()` is the public entry point. It captures `response_var` via NSE then delegates to `.mine_impl(data, response_str, ...)`, which:
+1. Builds a candidate term pool: first-order predictors + polynomial terms (`I(var^k)` up to `max_degree`) + interaction terms (all combinations up to `max_interact_vars` variables, using `:` — interaction only, no implicit main effects).
+2. Constructs the starting formula (intercept-only or all first-order terms, per `keep_all_vars`).
+3. Dispatches to the chosen search algorithm based on `method`.
 4. Returns `list(Formula = best_formula, all_models = results_dataframe)`.
 
-Key design detail: interaction terms use `*` (not `:`) so adding `a*b` automatically includes both main effects and the interaction. The `used_terms` pruning uses `attr(terms(formula), "term.labels")` to strip already-included terms from candidates.
+Interaction terms use `:` (not `*`) so each step adds exactly one term. Main effects are included as separate candidates and added by the search algorithm if they improve the metric.
+
+`.mine_impl()` is the internal workhorse (takes `response_str` as a plain string) so it can be called programmatically by `compare_methods()` via `do.call()`.
+
+### Search Algorithms
+
+- **`R/mine_greedy.R`** — `.mine_greedy()`: greedy forward selection; adds the single best term each round until no improvement.
+- **`R/mine_forward_backward.R`** — `.mine_forward_backward()`: forward step then backward step each round; tracks `added_terms` in `:` notation so formula rebuilds cleanly for removal.
+- **`R/mine_exhaustive.R`** — `.mine_exhaustive()`: stub (not yet implemented).
+
+`method` may also be a custom function with signature `function(candidate_terms, current_formula, current_metric, results, model_func, metric, metric_comparison, data)` for draft/experimental algorithms.
+
+### Comparison (`R/compare_methods.R`)
+
+`compare_methods(data, response_var, configs, ...)` runs multiple configurations side-by-side. `configs` is a named list of argument overrides; `...` provides shared defaults. Returns `list(summary = data.frame, details = named_list)`.
 
 ### Formula Wrapper (`R/formula_wrapper.R` + `R/utils.R`)
 
