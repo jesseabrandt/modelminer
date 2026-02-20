@@ -25,10 +25,13 @@ mine <- function(data, response_var, model_func = lm,
 
   # Add polynomial terms for numeric variables only
   # (non-numeric columns such as factors cannot be raised to a power)
+  # Guard against max_degree < 2: 2:1 in R produces c(2,1), not empty
   numeric_vars <- predictor_vars[sapply(predictor_vars, function(v) is.numeric(data[[v]]))]
-  for (var in numeric_vars) {
-    for (degree in 2:max_degree) {
-      candidate_terms <- c(candidate_terms, paste0("I(", var, "^", degree, ")"))
+  if (max_degree >= 2) {
+    for (var in numeric_vars) {
+      for (degree in 2:max_degree) {
+        candidate_terms <- c(candidate_terms, paste0("I(", var, "^", degree, ")"))
+      }
     }
   }
 
@@ -69,8 +72,12 @@ mine <- function(data, response_var, model_func = lm,
 
   keep_going <- TRUE
   while (keep_going) {
+    if (length(candidate_terms) == 0) break
+
     # reset each iteration so formula recovery only looks at this round's candidates
-    round_results <- data.frame(Formula = character(), Metric = I(list()))
+    # Track as parallel lists so metric_comparison can be any variadic function
+    round_formulas <- character(0)
+    round_metrics  <- list()
 
     for (term in candidate_terms) {
       # create a formula with new term
@@ -82,23 +89,25 @@ mine <- function(data, response_var, model_func = lm,
       cat("Formula:", deparse1(next_formula), "Metric:", next_metric, "\n")
 
       results <- rbind(results, data.frame(Formula = deparse1(next_formula), Metric = I(list(next_metric))))
-      round_results <- rbind(round_results, data.frame(Formula = deparse1(next_formula), Metric = I(list(next_metric))))
+      round_formulas <- c(round_formulas, deparse1(next_formula))
+      round_metrics  <- c(round_metrics, list(next_metric))
     }
 
-    best_round_metric <- metric_comparison(round_results$Metric)
-    best_global_metric <- metric_comparison(c(list(current_metric), round_results$Metric))
+    # do.call passes each metric as a separate arg, so min/max/custom all work
+    best_round_metric  <- do.call(metric_comparison, round_metrics)
+    best_global_metric <- do.call(metric_comparison, c(list(current_metric), round_metrics))
 
     # Use identical() rather than == so non-numeric metrics work correctly
     if (identical(best_global_metric, current_metric)) {
       keep_going <- FALSE
     } else {
       current_metric <- best_round_metric
-      best_idx <- which(sapply(round_results$Metric, identical, best_round_metric))[1]
-      current_formula <- as.formula(round_results$Formula[best_idx])
+      best_idx <- which(sapply(round_metrics, identical, best_round_metric))[1]
+      current_formula <- as.formula(round_formulas[best_idx])
 
       # remove term from list and add it to used terms list
       # attr(terms()) returns : notation; also strip * versions to handle interaction candidates
-      used_terms <- attr(base::terms(current_formula), "term.labels")
+      used_terms <- attr(stats::terms(current_formula), "term.labels")
       used_terms_star <- gsub(":", "*", used_terms)
       candidate_terms <- setdiff(candidate_terms, c(used_terms, used_terms_star))
     }
