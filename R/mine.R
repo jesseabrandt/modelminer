@@ -50,10 +50,9 @@ mine <- function(data, response_var, model_func = lm,
              method            = method)
 }
 
-# Internal workhorse — accepts response_var as a plain string so it can be
-# called programmatically (e.g. from compare_methods()) without NSE friction.
-#
-# All arguments mirror mine() exactly, except response_str replaces response_var.
+# Internal workhorse. Accepts response_var as a plain string rather than an
+# unquoted symbol so it can be called via do.call() from compare_methods()
+# without fighting R's NSE rules. All other arguments are identical to mine().
 .mine_impl <- function(data, response_str, model_func = lm,
                        max_degree = 3, max_interact_vars = 2, metric = AIC,
                        metric_comparison = min, keep_all_vars = FALSE,
@@ -68,7 +67,7 @@ mine <- function(data, response_var, model_func = lm,
   predictor_vars  <- setdiff(names(data), response_str)
   candidate_terms <- predictor_vars
 
-  # Polynomial terms (numeric columns only)
+  # Only numeric variables can be raised to a power; factors are excluded.
   numeric_vars <- predictor_vars[
     sapply(predictor_vars, function(v) is.numeric(data[[v]]))
   ]
@@ -80,10 +79,17 @@ mine <- function(data, response_var, model_func = lm,
     }
   }
 
-  # Interaction terms use : (interaction only, no implicit main effects).
-  # Main effects are separate candidates, so the search adds them independently
-  # — one term per step. This keeps greedy/forward-backward strict and makes
-  # term tracking in added_terms unambiguous.
+  # Interaction terms are generated with : rather than *, so each candidate
+  # represents only the interaction itself — no implicit main effects.
+  # This keeps the search strict: one term added or removed per step, and
+  # added_terms bookkeeping in forward_backward stays unambiguous.
+  #
+  # The downside is that a:b without a and b already in the model is
+  # statistically awkward (interaction without main effects). The current
+  # design relies on the search finding a and b first if they improve the
+  # metric, but there's no enforcement. A future improvement might be to
+  # require main effects as prerequisites before their interaction is offered
+  # as a candidate, or to group them and treat the whole family as one step.
   if (max_interact_vars > 1 && length(predictor_vars) >= 2) {
     max_k <- min(max_interact_vars, length(predictor_vars))
     for (i in seq_len(max_k - 1)) {
@@ -97,14 +103,20 @@ mine <- function(data, response_var, model_func = lm,
   # ---- Starting formula ----
 
   if (keep_all_vars) {
-    start_formula   <- as.formula(paste(response_str, "~",
-                                        paste(predictor_vars, collapse = " + ")))
-    initial_terms   <- predictor_vars   # tracked for forward_backward bookkeeping
+    start_formula <- as.formula(paste(response_str, "~",
+                                      paste(predictor_vars, collapse = " + ")))
+    # forward_backward needs to know which terms are already in the model so
+    # it can consider dropping them during backward steps.
+    initial_terms <- predictor_vars
   } else {
-    start_formula   <- as.formula(paste(response_str, "~ 1"))
-    initial_terms   <- character(0)
+    start_formula <- as.formula(paste(response_str, "~ 1"))
+    initial_terms <- character(0)
   }
 
+  # A failed starting model is fatal: there is no baseline metric to improve
+  # on, so the search cannot proceed. Per-term failures later are non-fatal
+  # (the term is skipped with a warning) because the search can still continue
+  # with the remaining candidates.
   start_model <- tryCatch(
     model_func(start_formula, data = data),
     error = function(e) {

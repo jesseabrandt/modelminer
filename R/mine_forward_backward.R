@@ -1,21 +1,27 @@
-# Internal: forward-backward stepwise model selection.
+# Forward-backward stepwise model selection.
 #
-# Called by .mine_impl() after shared setup. Each iteration consists of:
-#   Forward step  — try adding each candidate term; keep the best improvement.
-#   Backward step — try removing each term currently in the model; keep the
-#                   best improvement.
-# Repeats until neither step improves the metric.
+# Each iteration runs two steps in sequence:
+#   Forward  — try adding each candidate term; keep the best improvement.
+#   Backward — try removing each term currently in the model; keep the best
+#              improvement (or no change if none helps).
+# The iteration repeats until neither step changes the model.
 #
-# Terms are tracked in *-notation (as passed in candidate_terms / initial_terms)
-# rather than as expanded term labels, so the formula can be rebuilt cleanly
-# for backward steps without : vs * bookkeeping.
+# Running backward after every forward step (rather than running all forward
+# steps to convergence before any backward steps) lets the algorithm correct
+# early additions that become redundant once better terms are found. The
+# trade-off is more model evaluations per iteration.
+#
+# added_terms tracks terms in : notation, matching what attr(terms(), "term.labels")
+# returns. This makes the formula rebuilding for backward steps straightforward:
+# remove a term from the vector and pass the rest to .build_formula().
 #
 # Returns list(Formula, all_models) matching the mine() contract.
 .mine_forward_backward <- function(candidate_terms, current_formula, current_metric,
                                    results, model_func, metric, metric_comparison,
                                    data, response_str, initial_terms = character(0)) {
 
-  # added_terms: terms currently contributing to current_formula, in *-notation
+  # Terms currently in the model, tracked in : notation. Starts populated
+  # when keep_all_vars = TRUE so those terms are eligible for backward removal.
   added_terms <- initial_terms
 
   keep_going <- TRUE
@@ -27,7 +33,7 @@
     if (length(candidate_terms) > 0) {
       fwd_formulas <- character(0)
       fwd_metrics  <- list()
-      fwd_terms    <- character(0)   # which candidate was added for each trial
+      fwd_terms    <- character(0)  # which candidate was trialled for each entry
 
       for (term in candidate_terms) {
         try_formula <- .build_formula(response_str, c(added_terms, term))
@@ -74,7 +80,7 @@
           current_formula <- as.formula(fwd_formulas[best_idx])
           current_metric  <- best_fwd
 
-          # Prune candidates: remove anything now covered by the formula
+          # Prune candidates that are now covered by the expanded formula.
           used            <- attr(stats::terms(current_formula), "term.labels")
           candidate_terms <- setdiff(candidate_terms, used)
           changed         <- TRUE
@@ -87,7 +93,7 @@
     if (length(added_terms) > 0) {
       bwd_formulas <- character(0)
       bwd_metrics  <- list()
-      bwd_removed  <- character(0)  # which term was dropped for each trial
+      bwd_removed  <- character(0)  # which term was omitted for each trial
 
       for (term in added_terms) {
         try_formula <- .build_formula(response_str, setdiff(added_terms, term))
@@ -131,7 +137,9 @@
           best_idx        <- which(sapply(bwd_metrics, identical, best_bwd))[1]
           dropped_term    <- bwd_removed[best_idx]
           added_terms     <- setdiff(added_terms, dropped_term)
-          candidate_terms <- c(candidate_terms, dropped_term)  # can be re-added later
+          # The dropped term goes back into the candidate pool; a later forward
+          # step could re-add it in a different context.
+          candidate_terms <- c(candidate_terms, dropped_term)
           current_formula <- as.formula(bwd_formulas[best_idx])
           current_metric  <- best_bwd
           changed         <- TRUE
