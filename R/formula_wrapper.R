@@ -10,8 +10,10 @@
 #'
 #' @export
 #' @examples
+#' \dontrun{
 #' formula_glmnet <- formula_wrap(glmnet)
 #' formula_glmnet(mtcars, mpg ~ cyl + hp)
+#' }
 #'
 formula_wrap <- function(model_func, x_name = "x", y_name = "y"){
 

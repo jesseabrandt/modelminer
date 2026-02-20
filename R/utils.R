@@ -1,3 +1,4 @@
+#' @importFrom stats model.matrix
 # this function is used inside formula_wrap
 to_xy <- function(data, formula) {
   # Get the response variable from the formula

@@ -1,19 +1,24 @@
-#' Title
+#' Greedy forward stepwise model selection with automated feature engineering
 #'
-#' @param data
-#' @param response_var
-#' @param model_func
-#' @param max_degree
-#' @param max_interact_vars
-#' @param metric
-#' @param metric_comparison is a function that compares the two metrics and returns the preferable one. Defaults to min, can be max or some other comparison function.
-#' @param keep_all_vars if set to TRUE, will keep all of the first-order terms in the model, just testing interactions and higher-order effects.
+#' @param data A data frame containing the response and predictor variables.
+#' @param response_var The name of the response variable (unquoted).
+#' @param model_func A model function accepting a formula and data argument. Defaults to \code{lm}.
+#' @param max_degree Maximum degree for polynomial terms. Defaults to 3.
+#' @param max_interact_vars Maximum number of variables in interaction terms. Defaults to 2.
+#' @param metric A function to compute the model selection metric. Defaults to \code{AIC}.
+#' @param metric_comparison A function that compares two metric values and returns the preferable one. Defaults to \code{min}.
+#' @param keep_all_vars If \code{TRUE}, starts with all first-order terms and only tests interactions and higher-order effects. Defaults to \code{FALSE}.
 #'
-#' @returns
+#' @returns A list with two elements: \code{Formula} (the best formula found) and
+#'   \code{all_models} (a data frame of all evaluated formulas and their metric values).
 #' @export
 #'
 #' @examples
+#' result <- mine(mtcars, mpg)
+#' result$Formula
 #' @importFrom rlang enexpr as_string
+#' @importFrom stats AIC as.formula lm
+#' @importFrom utils combn
 mine <- function(data, response_var, model_func = lm,
   max_degree = 3, max_interact_vars = 2, metric = AIC, metric_comparison = min,
   keep_all_vars = FALSE) {

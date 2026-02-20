@@ -20,7 +20,9 @@ a new function that accepts a data frame and a formula, and calls the original m
 Wrap a model function to accept a formula interface
 }
 \examples{
+\dontrun{
 formula_glmnet <- formula_wrap(glmnet)
 formula_glmnet(mtcars, mpg ~ cyl + hp)
+}
 
 }

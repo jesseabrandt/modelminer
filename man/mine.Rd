@@ -2,7 +2,7 @@
 % Please edit documentation in R/mine.R
 \name{mine}
 \alias{mine}
-\title{Title}
+\title{Greedy forward stepwise model selection with automated feature engineering}
 \usage{
 mine(
   data,
@@ -16,10 +16,30 @@ mine(
 )
 }
 \arguments{
-\item{metric_comparison}{is a function that compares the two metrics and returns the preferable one. Defaults to min, can be max or some other comparison function.}
+\item{data}{A data frame containing the response and predictor variables.}
 
-\item{keep_all_vars}{if set to TRUE, will keep all of the first-order terms in the model, just testing interactions and higher-order effects.}
+\item{response_var}{The name of the response variable (unquoted).}
+
+\item{model_func}{A model function accepting a formula and data argument. Defaults to \code{lm}.}
+
+\item{max_degree}{Maximum degree for polynomial terms. Defaults to 3.}
+
+\item{max_interact_vars}{Maximum number of variables in interaction terms. Defaults to 2.}
+
+\item{metric}{A function to compute the model selection metric. Defaults to \code{AIC}.}
+
+\item{metric_comparison}{A function that compares two metric values and returns the preferable one. Defaults to \code{min}.}
+
+\item{keep_all_vars}{If \code{TRUE}, starts with all first-order terms and only tests interactions and higher-order effects. Defaults to \code{FALSE}.}
+}
+\value{
+A list with two elements: \code{Formula} (the best formula found) and
+  \code{all_models} (a data frame of all evaluated formulas and their metric values).
 }
 \description{
-Title
+Greedy forward stepwise model selection with automated feature engineering
+}
+\examples{
+result <- mine(mtcars, mpg)
+result$Formula
 }
