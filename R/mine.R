@@ -1,13 +1,29 @@
-#' Greedy forward stepwise model selection with automated feature engineering
+#' Automated model selection with feature engineering
 #'
 #' @param data A data frame containing the response and predictor variables.
 #' @param response_var The name of the response variable (unquoted).
-#' @param model_func A model function accepting a formula and data argument. Defaults to \code{lm}.
+#' @param model_func A model function accepting \code{formula} and \code{data} arguments.
+#'   Defaults to \code{lm}.
 #' @param max_degree Maximum degree for polynomial terms. Defaults to 3.
 #' @param max_interact_vars Maximum number of variables in interaction terms. Defaults to 2.
 #' @param metric A function to compute the model selection metric. Defaults to \code{AIC}.
-#' @param metric_comparison A function that compares two metric values and returns the preferable one. Defaults to \code{min}.
-#' @param keep_all_vars If \code{TRUE}, starts with all first-order terms and only tests interactions and higher-order effects. Defaults to \code{FALSE}.
+#' @param metric_comparison A function that compares metric values and returns the preferable one.
+#'   Defaults to \code{min}.
+#' @param keep_all_vars If \code{TRUE}, starts with all first-order terms in the formula.
+#'   Defaults to \code{FALSE}.
+#' @param method Search algorithm to use. One of \code{"greedy"} (default),
+#'   \code{"forward_backward"}, or \code{"exhaustive"}. May also be a custom search
+#'   function — see Details.
+#'
+#' @details
+#' When \code{method} is a function it must have the signature:
+#' \preformatted{
+#'   function(candidate_terms, current_formula, current_metric,
+#'            results, model_func, metric, metric_comparison, data)
+#' }
+#' and return \code{list(Formula, all_models)} matching the standard contract.
+#' This lets you pass experimental ("draft") search implementations for comparison
+#' via \code{\link{compare_methods}}.
 #'
 #' @returns A list with two elements: \code{Formula} (the best formula found) and
 #'   \code{all_models} (a data frame of all evaluated formulas and their metric values).
@@ -20,18 +36,42 @@
 #' @importFrom stats AIC as.formula lm
 #' @importFrom utils combn
 mine <- function(data, response_var, model_func = lm,
-  max_degree = 3, max_interact_vars = 2, metric = AIC, metric_comparison = min,
-  keep_all_vars = FALSE) {
-
-  # Create vector of possible predictor terms
+                 max_degree = 3, max_interact_vars = 2, metric = AIC,
+                 metric_comparison = min, keep_all_vars = FALSE,
+                 method = "greedy") {
   response_str <- as_string(enexpr(response_var))
-  predictor_vars <- setdiff(names(data), response_str) # get predictor variables
-  candidate_terms <- predictor_vars # renamed from `terms` to avoid shadowing base::terms()
+  .mine_impl(data, response_str,
+             model_func        = model_func,
+             max_degree        = max_degree,
+             max_interact_vars = max_interact_vars,
+             metric            = metric,
+             metric_comparison = metric_comparison,
+             keep_all_vars     = keep_all_vars,
+             method            = method)
+}
 
-  # Add polynomial terms for numeric variables only
-  # (non-numeric columns such as factors cannot be raised to a power)
-  # Guard against max_degree < 2: 2:1 in R produces c(2,1), not empty
-  numeric_vars <- predictor_vars[sapply(predictor_vars, function(v) is.numeric(data[[v]]))]
+# Internal workhorse — accepts response_var as a plain string so it can be
+# called programmatically (e.g. from compare_methods()) without NSE friction.
+#
+# All arguments mirror mine() exactly, except response_str replaces response_var.
+.mine_impl <- function(data, response_str, model_func = lm,
+                       max_degree = 3, max_interact_vars = 2, metric = AIC,
+                       metric_comparison = min, keep_all_vars = FALSE,
+                       method = "greedy") {
+
+  if (!is.function(method)) {
+    method <- match.arg(method, c("greedy", "forward_backward", "exhaustive"))
+  }
+
+  # ---- Shared setup: candidate term pool ----
+
+  predictor_vars  <- setdiff(names(data), response_str)
+  candidate_terms <- predictor_vars
+
+  # Polynomial terms (numeric columns only)
+  numeric_vars <- predictor_vars[
+    sapply(predictor_vars, function(v) is.numeric(data[[v]]))
+  ]
   if (max_degree >= 2) {
     for (var in numeric_vars) {
       for (degree in 2:max_degree) {
@@ -40,83 +80,74 @@ mine <- function(data, response_var, model_func = lm,
     }
   }
 
-  # Add interaction terms
-  # Using * rather than : so that adding an interaction also pulls in its main
-  # effects if they are not already in the formula. This can find better models
-  # in fewer greedy steps, at the cost of adding multiple terms at once.
-  # Trade-off: : is cleaner for strict one-term-at-a-time greedy search.
-  if (max_interact_vars > 1) {
+  # Interaction terms — * rather than : so adding one term also brings in main
+  # effects. See CLAUDE.md for the design trade-off.
+  if (max_interact_vars > 1 && length(predictor_vars) >= 2) {
     max_k <- min(max_interact_vars, length(predictor_vars))
-    for (i in 1:(max_k - 1)) {
-      if (i + 1 <= length(predictor_vars)) {
-        interact_terms <- combn(predictor_vars, i + 1, function(vars) {
-          paste(vars, collapse = "*") # trying with * instead of :
-        })
-        candidate_terms <- c(candidate_terms, interact_terms)
-      }
+    for (i in seq_len(max_k - 1)) {
+      interact_terms <- combn(predictor_vars, i + 1, function(vars) {
+        paste(vars, collapse = "*")
+      })
+      candidate_terms <- c(candidate_terms, interact_terms)
     }
   }
 
-  # create a starting formula
+  # ---- Starting formula ----
+
   if (keep_all_vars) {
-    current_formula <- as.formula(paste(response_str, "~", paste(predictor_vars, collapse = " + ")))
+    start_formula   <- as.formula(paste(response_str, "~",
+                                        paste(predictor_vars, collapse = " + ")))
+    initial_terms   <- predictor_vars   # tracked for forward_backward bookkeeping
   } else {
-    current_formula <- as.formula(paste(response_str, "~ 1"))
+    start_formula   <- as.formula(paste(response_str, "~ 1"))
+    initial_terms   <- character(0)
   }
 
-  # fit a model
-  current_model <- model_func(current_formula, data = data)
-
-  # get metric of model
-  current_metric <- metric(current_model)
-
-  cat("Formula:", deparse(current_formula), "Metric:", current_metric, "\n")
-
-  # Metric column is list() to accommodate non-numeric metric objects
-  results <- data.frame(Formula = deparse1(current_formula), Metric = I(list(current_metric)))
-
-  keep_going <- TRUE
-  while (keep_going) {
-    if (length(candidate_terms) == 0) break
-
-    # reset each iteration so formula recovery only looks at this round's candidates
-    # Track as parallel lists so metric_comparison can be any variadic function
-    round_formulas <- character(0)
-    round_metrics  <- list()
-
-    for (term in candidate_terms) {
-      # create a formula with new term
-      next_formula <- as.formula(paste(deparse1(current_formula), "+", term))
-
-      next_model <- model_func(formula = next_formula, data = data)
-      next_metric <- metric(next_model)
-
-      cat("Formula:", deparse1(next_formula), "Metric:", next_metric, "\n")
-
-      results <- rbind(results, data.frame(Formula = deparse1(next_formula), Metric = I(list(next_metric))))
-      round_formulas <- c(round_formulas, deparse1(next_formula))
-      round_metrics  <- c(round_metrics, list(next_metric))
+  start_model <- tryCatch(
+    model_func(start_formula, data = data),
+    error = function(e) {
+      stop("Failed to fit starting model: ", conditionMessage(e), call. = FALSE)
     }
+  )
 
-    # do.call passes each metric as a separate arg, so min/max/custom all work
-    best_round_metric  <- do.call(metric_comparison, round_metrics)
-    best_global_metric <- do.call(metric_comparison, c(list(current_metric), round_metrics))
-
-    # Use identical() rather than == so non-numeric metrics work correctly
-    if (identical(best_global_metric, current_metric)) {
-      keep_going <- FALSE
-    } else {
-      current_metric <- best_round_metric
-      best_idx <- which(sapply(round_metrics, identical, best_round_metric))[1]
-      current_formula <- as.formula(round_formulas[best_idx])
-
-      # remove term from list and add it to used terms list
-      # attr(terms()) returns : notation; also strip * versions to handle interaction candidates
-      used_terms <- attr(stats::terms(current_formula), "term.labels")
-      used_terms_star <- gsub(":", "*", used_terms)
-      candidate_terms <- setdiff(candidate_terms, c(used_terms, used_terms_star))
+  start_metric <- tryCatch(
+    metric(start_model),
+    error = function(e) {
+      stop("Failed to compute metric for starting model: ",
+           conditionMessage(e), call. = FALSE)
     }
+  )
+
+  cat("Formula:", deparse(start_formula), "Metric:", start_metric, "\n")
+
+  start_results <- data.frame(
+    Formula = deparse1(start_formula),
+    Metric  = I(list(start_metric))
+  )
+
+  # ---- Dispatch to search algorithm ----
+
+  common_args <- list(
+    candidate_terms   = candidate_terms,
+    current_formula   = start_formula,
+    current_metric    = start_metric,
+    results           = start_results,
+    model_func        = model_func,
+    metric            = metric,
+    metric_comparison = metric_comparison,
+    data              = data
+  )
+
+  if (is.function(method)) {
+    do.call(method, common_args)
+  } else if (method == "greedy") {
+    do.call(.mine_greedy, common_args)
+  } else if (method == "forward_backward") {
+    do.call(.mine_forward_backward,
+            c(common_args, list(response_str = response_str,
+                                initial_terms = initial_terms)))
+  } else {
+    do.call(.mine_exhaustive,
+            c(common_args, list(response_str = response_str)))
   }
-
-  return(list(Formula = current_formula, all_models = results)) # placeholder
 }
