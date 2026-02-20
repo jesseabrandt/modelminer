@@ -1,17 +1,15 @@
+#' @importFrom stats model.matrix
 # this function is used inside formula_wrap
 to_xy <- function(data, formula) {
-  # print("test")
-  # Get the response variable and predictor variables from the formula
+  # Get the response variable from the formula
   response_var <- all.vars(formula)[1]
-  # print("ok")
-  predictors <- setdiff(names(data), as_string(enexpr(response_var)))
 
-  # Extract the response variable (y) and predictor variables (X) from the data
+  # Extract response vector
   y <- data[[response_var]]
-  x <- data[predictors]
 
-  # convert x to matrix
-  x <- as.matrix(x)
+  # Use model.matrix to respect the formula's RHS (including interactions,
+  # polynomials, and factor encoding). Drop the intercept column.
+  x <- model.matrix(formula, data = data)[, -1, drop = FALSE]
+
   return(list(y = y, x = x))
 }
-

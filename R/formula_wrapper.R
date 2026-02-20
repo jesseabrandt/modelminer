@@ -10,11 +10,12 @@
 #'
 #' @export
 #' @examples
+#' \dontrun{
 #' formula_glmnet <- formula_wrap(glmnet)
 #' formula_glmnet(mtcars, mpg ~ cyl + hp)
+#' }
 #'
 formula_wrap <- function(model_func, x_name = "x", y_name = "y"){
-
 
   # there is probably a better way to determine what the varnames are
   # I do not know how consistent they are
@@ -22,19 +23,11 @@ formula_wrap <- function(model_func, x_name = "x", y_name = "y"){
 
   new_func <- function(data, formula, ...){
     xy <- to_xy(data, formula)
-    x <- xy$x
-    y <- xy$y
-    print(x)
-    print(y)
     args <- list(...)
-    args[[x_name]] <- x
-    args[[y_name]] <- y
-    # print(args)
-    result <- do.call(model_func, args)
-    result$call <- match.call()
-    result
+    args[[x_name]] <- xy$x
+    args[[y_name]] <- xy$y
+    do.call(model_func, args)
   }
+
+  return(new_func)
 }
-
-
-
