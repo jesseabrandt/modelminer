@@ -11,13 +11,17 @@
 #'   Defaults to \code{min}.
 #' @param keep_all_vars If \code{TRUE}, starts with all first-order terms in the formula.
 #'   Defaults to \code{FALSE}.
-#' @param method Search algorithm to use. One of \code{"greedy"} (default),
-#'   \code{"greedy_alt"} (phased: first-order → polynomial → interactions
-#'   among selected terms only), \code{"greedy_alt_full"} (same phases but
-#'   phase 3 considers interactions among all predictors, catching variables
-#'   that only matter inside an interaction), or \code{"forward_backward"}.
-#'   \code{"exhaustive"} is accepted but \strong{not yet implemented} — calling
-#'   it will error immediately. May also be a custom search function — see Details.
+#' @param method Search algorithm to use. One of:
+#'   \itemize{
+#'     \item \code{"greedy"} (default) — forward selection over a single pre-built pool
+#'     \item \code{"greedy_alt"} — phased: first-order → polynomial (selected vars) → interactions (selected terms)
+#'     \item \code{"greedy_alt_full"} — same phases, but phase 3 considers interactions among all predictors
+#'     \item \code{"greedy_alt_fb"} — \code{greedy_alt} with forward-backward within each phase
+#'     \item \code{"greedy_alt_full_fb"} — \code{greedy_alt_full} with forward-backward within each phase
+#'     \item \code{"forward_backward"} — forward-backward over a single pre-built pool
+#'   }
+#'   \code{"exhaustive"} is accepted but \strong{not yet implemented}.
+#'   May also be a custom search function — see Details.
 #'
 #' @details
 #' When \code{method} is a function it must have the signature:
@@ -74,6 +78,7 @@ mine <- function(data, response_var, model_func = lm,
 
   if (!is.function(method)) {
     method <- match.arg(method, c("greedy", "greedy_alt", "greedy_alt_full",
+                                   "greedy_alt_fb", "greedy_alt_full_fb",
                                    "forward_backward", "exhaustive"))
   }
 
@@ -171,13 +176,16 @@ mine <- function(data, response_var, model_func = lm,
     do.call(method, common_args)
   } else if (method == "greedy") {
     do.call(.mine_greedy, common_args)
-  } else if (method %in% c("greedy_alt", "greedy_alt_full")) {
+  } else if (method %in% c("greedy_alt", "greedy_alt_full",
+                            "greedy_alt_fb", "greedy_alt_full_fb")) {
     do.call(.mine_greedy_alt,
             c(common_args, list(predictor_vars    = predictor_vars,
                                 numeric_vars      = numeric_vars,
                                 max_degree        = max_degree,
                                 max_interact_vars = max_interact_vars,
-                                full_interactions = (method == "greedy_alt_full"))))
+                                full_interactions = grepl("full", method),
+                                do_backward       = grepl("_fb$", method),
+                                response_str      = response_str)))
   } else if (method == "forward_backward") {
     do.call(.mine_forward_backward,
             c(common_args, list(response_str = response_str,

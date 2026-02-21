@@ -36,13 +36,17 @@ Defaults to \code{min}.}
 \item{keep_all_vars}{If \code{TRUE}, starts with all first-order terms in the formula.
 Defaults to \code{FALSE}.}
 
-\item{method}{Search algorithm to use. One of \code{"greedy"} (default),
-\code{"greedy_alt"} (phased: first-order → polynomial → interactions
-among selected terms only), \code{"greedy_alt_full"} (same phases but
-phase 3 considers interactions among all predictors, catching variables
-that only matter inside an interaction), or \code{"forward_backward"}.
-\code{"exhaustive"} is accepted but \strong{not yet implemented} — calling
-it will error immediately. May also be a custom search function — see Details.}
+\item{method}{Search algorithm to use. One of:
+\itemize{
+  \item \code{"greedy"} (default) — forward selection over a single pre-built pool
+  \item \code{"greedy_alt"} — phased: first-order → polynomial (selected vars) → interactions (selected terms)
+  \item \code{"greedy_alt_full"} — same phases, but phase 3 considers interactions among all predictors
+  \item \code{"greedy_alt_fb"} — \code{greedy_alt} with forward-backward within each phase
+  \item \code{"greedy_alt_full_fb"} — \code{greedy_alt_full} with forward-backward within each phase
+  \item \code{"forward_backward"} — forward-backward over a single pre-built pool
+}
+\code{"exhaustive"} is accepted but \strong{not yet implemented}.
+May also be a custom search function — see Details.}
 }
 \value{
 A list with four elements:
