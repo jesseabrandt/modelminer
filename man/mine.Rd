@@ -2,7 +2,7 @@
 % Please edit documentation in R/mine.R
 \name{mine}
 \alias{mine}
-\title{Greedy forward stepwise model selection with automated feature engineering}
+\title{Automated model selection with feature engineering}
 \usage{
 mine(
   data,
@@ -12,7 +12,8 @@ mine(
   max_interact_vars = 2,
   metric = AIC,
   metric_comparison = min,
-  keep_all_vars = FALSE
+  keep_all_vars = FALSE,
+  method = "greedy"
 )
 }
 \arguments{
@@ -20,7 +21,8 @@ mine(
 
 \item{response_var}{The name of the response variable (unquoted).}
 
-\item{model_func}{A model function accepting a formula and data argument. Defaults to \code{lm}.}
+\item{model_func}{A model function accepting \code{formula} and \code{data} arguments.
+Defaults to \code{lm}.}
 
 \item{max_degree}{Maximum degree for polynomial terms. Defaults to 3.}
 
@@ -28,16 +30,32 @@ mine(
 
 \item{metric}{A function to compute the model selection metric. Defaults to \code{AIC}.}
 
-\item{metric_comparison}{A function that compares two metric values and returns the preferable one. Defaults to \code{min}.}
+\item{metric_comparison}{A function that compares metric values and returns the preferable one.
+Defaults to \code{min}.}
 
-\item{keep_all_vars}{If \code{TRUE}, starts with all first-order terms and only tests interactions and higher-order effects. Defaults to \code{FALSE}.}
+\item{keep_all_vars}{If \code{TRUE}, starts with all first-order terms in the formula.
+Defaults to \code{FALSE}.}
+
+\item{method}{Search algorithm to use. One of \code{"greedy"} (default),
+\code{"forward_backward"}, or \code{"exhaustive"}. May also be a custom search
+function — see Details.}
 }
 \value{
 A list with two elements: \code{Formula} (the best formula found) and
   \code{all_models} (a data frame of all evaluated formulas and their metric values).
 }
 \description{
-Greedy forward stepwise model selection with automated feature engineering
+Automated model selection with feature engineering
+}
+\details{
+When \code{method} is a function it must have the signature:
+\preformatted{
+  function(candidate_terms, current_formula, current_metric,
+           results, model_func, metric, metric_comparison, data)
+}
+and return \code{list(Formula, all_models)} matching the standard contract.
+This lets you pass experimental ("draft") search implementations for comparison
+via \code{\link{compare_methods}}.
 }
 \examples{
 result <- mine(mtcars, mpg)

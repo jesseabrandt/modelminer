@@ -7,22 +7,29 @@
 formula_wrap(model_func, x_name = "x", y_name = "y")
 }
 \arguments{
-\item{model_func}{is the model function to wrap. It should take a predictor matrix and response vector as arguments.}
+\item{model_func}{A model function that accepts a predictor matrix and
+response vector as named arguments.}
 
-\item{x_name}{is the name of the predictor matrix in the model function.}
+\item{x_name}{Name of the predictor matrix argument in \code{model_func}.
+Defaults to \code{"x"}.}
 
-\item{y_name}{is the name of the response vector in the model function.}
+\item{y_name}{Name of the response vector argument in \code{model_func}.
+Defaults to \code{"y"}.}
 }
 \value{
-a new function that accepts a data frame and a formula, and calls the original model function with the appropriate arguments.
+A new function with the signature \code{function(data, formula, ...)}
+  that extracts \code{x} and \code{y} from \code{data} using the formula and
+  calls the original \code{model_func}.
 }
 \description{
-Wrap a model function to accept a formula interface
+Adapts functions that take a predictor matrix \code{x} and response vector
+\code{y} (e.g. \code{glmnet}) into functions that accept a \code{formula}
+and \code{data} argument, making them compatible with \code{mine()}.
 }
 \examples{
 \dontrun{
-formula_glmnet <- formula_wrap(glmnet)
-formula_glmnet(mtcars, mpg ~ cyl + hp)
+formula_glmnet <- formula_wrap(glmnet::glmnet)
+result <- mine(mtcars, mpg, model_func = formula_glmnet)
 }
 
 }
