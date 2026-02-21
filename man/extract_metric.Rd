@@ -2,7 +2,7 @@
 % Please edit documentation in R/metrics.R
 \name{extract_metric}
 \alias{extract_metric}
-\title{Extract a comparable metric from a fitted model}
+\title{Extract a model-embedded metric for use with mine()}
 \usage{
 extract_metric(model, ...)
 }
@@ -15,42 +15,24 @@ extract_metric(model, ...)
 A single numeric value, lower-is-better.
 }
 \description{
-A generic function that extracts a scalar metric suitable for use as
-\code{mine()}'s \code{metric} argument. It dispatches on the class of the
-fitted model, so the same call works regardless of which package produced
-the model.
+Extracts a scalar metric from a fitted model object, suitable for passing
+as \code{mine()}'s \code{metric} argument. Dispatches on the model's class.
 }
 \details{
-\strong{Convention:} all methods return a value where \emph{lower is better},
-so \code{metric_comparison = min} (the default in \code{mine()}) is always
-correct. For metrics that are naturally higher-is-better (R², accuracy),
-methods return their negation.
+\strong{All methods return lower-is-better values}, so
+\code{metric_comparison = min} (mine()'s default) is always correct.
 
-\strong{For standard R model objects} (\code{lm}, \code{glm}, \code{gam},
-\code{coxph}, \code{lmer}, etc.) the default method calls \code{AIC()},
-so you do not need \code{extract_metric} for those — the default
-\code{metric = AIC} in \code{mine()} already handles them.
+\strong{Default method:} calls \code{AIC()}, covering \code{lm},
+\code{glm}, \code{gam}, \code{coxph}, \code{lmer}, and other standard
+R model classes. For those you do not need \code{extract_metric} at all —
+\code{metric = AIC} (the default) already handles them.
 
-\strong{Extending to new classes:} define a method and it is immediately
-available as \code{metric = extract_metric} in any \code{mine()} call:
+\strong{Adding support for a new class:}
 \preformatted{
-  extract_metric.my_class <- function(model, ...) model$my_loss
+  extract_metric.my_class <- function(model, ...) model$my_loss_slot
 }
+Use \code{list_metrics()} to inspect what slots are available.
 }
-\examples{
-\dontrun{
-# cv.glmnet
-formula_cv_glmnet <- formula_wrap(\(x, y, ...) glmnet::cv.glmnet(x, y, ...))
-mine(mtcars, mpg,
-     model_func        = formula_cv_glmnet,
-     metric            = extract_metric,
-     keep_all_vars     = TRUE,
-     max_degree        = 1,
-     max_interact_vars = 1)
-
-# ranger
-mine(mtcars, mpg,
-     model_func = \(formula, data) ranger::ranger(formula, data),
-     metric     = extract_metric)
-}
+\seealso{
+\code{\link{list_metrics}}
 }
