@@ -34,8 +34,7 @@ wrapped with `formula_wrap()`.
 The simplest case — finding predictors of fuel economy in `mtcars`:
 
 ```{r lm-example, results = "hide"}
-# library(modelminer)
-devtools::load_all()# modelminer isn't published at the moment, so load it from source.
+library(modelminer)
 
 lm_result <- mine(mtcars, mpg, max_degree = 2, max_interact_vars = 2)
 ```
@@ -66,7 +65,7 @@ the signature compatible with what `mine()` expects.
 Here we search for predictors of transmission type in `mtcars` (`am`: 0 =
 automatic, 1 = manual):
 
-```{r glm-example, results = "hide"}
+```{r glm-example, results = "hide", warning = FALSE}
 glm_result <- mine(
   mtcars, am,
   model_func        = \(formula, data) glm(formula, data, family = binomial),
@@ -77,12 +76,18 @@ glm_result <- mine(
 
 ```{r glm-result}
 glm_result$Formula
-# glm_result$all_models
 ```
 
 Because `glm` returns an object that `AIC()` understands, no change to the
 `metric` argument is needed. The anonymous function only needs to fix the
 `family` argument that `mine()` has no way to know about.
+
+> **Note on warnings:** Binomial GLMs commonly emit "fitted probabilities
+> numerically 0 or 1 occurred" when a strong predictor (like `wt` in `mtcars`)
+> separates the two classes nearly perfectly. This is a property of the data,
+> not the search algorithm. The model and AIC values are still valid for
+> selection purposes; it becomes a concern if you need reliable standard errors
+> or p-values from the final model.
 
 ---
 
