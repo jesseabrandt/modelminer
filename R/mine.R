@@ -11,10 +11,11 @@
 #'   Defaults to \code{min}.
 #' @param keep_all_vars If \code{TRUE}, starts with all first-order terms in the formula.
 #'   Defaults to \code{FALSE}.
-#' @param method Search algorithm to use. One of \code{"greedy"} (default) or
-#'   \code{"forward_backward"}. \code{"exhaustive"} is accepted but \strong{not
-#'   yet implemented} — calling it will error immediately. May also be a custom
-#'   search function — see Details.
+#' @param method Search algorithm to use. One of \code{"greedy"} (default),
+#'   \code{"greedy_alt"} (phased: first-order → polynomial → interaction),
+#'   or \code{"forward_backward"}. \code{"exhaustive"} is accepted but
+#'   \strong{not yet implemented} — calling it will error immediately. May
+#'   also be a custom search function — see Details.
 #'
 #' @details
 #' When \code{method} is a function it must have the signature:
@@ -70,7 +71,7 @@ mine <- function(data, response_var, model_func = lm,
                        method = "greedy") {
 
   if (!is.function(method)) {
-    method <- match.arg(method, c("greedy", "forward_backward", "exhaustive"))
+    method <- match.arg(method, c("greedy", "greedy_alt", "forward_backward", "exhaustive"))
   }
 
   # ---- Shared setup: candidate term pool ----
@@ -167,6 +168,12 @@ mine <- function(data, response_var, model_func = lm,
     do.call(method, common_args)
   } else if (method == "greedy") {
     do.call(.mine_greedy, common_args)
+  } else if (method == "greedy_alt") {
+    do.call(.mine_greedy_alt,
+            c(common_args, list(predictor_vars    = predictor_vars,
+                                numeric_vars      = numeric_vars,
+                                max_degree        = max_degree,
+                                max_interact_vars = max_interact_vars)))
   } else if (method == "forward_backward") {
     do.call(.mine_forward_backward,
             c(common_args, list(response_str = response_str,

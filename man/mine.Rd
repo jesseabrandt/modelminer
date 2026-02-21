@@ -36,10 +36,11 @@ Defaults to \code{min}.}
 \item{keep_all_vars}{If \code{TRUE}, starts with all first-order terms in the formula.
 Defaults to \code{FALSE}.}
 
-\item{method}{Search algorithm to use. One of \code{"greedy"} (default) or
-\code{"forward_backward"}. \code{"exhaustive"} is accepted but \strong{not
-yet implemented} — calling it will error immediately. May also be a custom
-search function — see Details.}
+\item{method}{Search algorithm to use. One of \code{"greedy"} (default),
+\code{"greedy_alt"} (phased: first-order → polynomial → interaction),
+or \code{"forward_backward"}. \code{"exhaustive"} is accepted but
+\strong{not yet implemented} — calling it will error immediately. May
+also be a custom search function — see Details.}
 }
 \value{
 A list with four elements:
