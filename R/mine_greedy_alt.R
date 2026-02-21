@@ -70,9 +70,6 @@
   current_formula <- phase1$formula
   current_metric  <- phase1$metric
   results         <- phase1$results
-  # phase_terms: terms this phase actually added (only exists for fb variant)
-  phase1_terms <- if (do_backward) phase1$phase_terms else
-    setdiff(attr(stats::terms(current_formula), "term.labels"), character(0))
 
   # ── Phase 2: polynomial terms for selected variables only ──────────────────
 

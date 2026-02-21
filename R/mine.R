@@ -13,7 +13,8 @@
 #'   Defaults to \code{FALSE}.
 #' @param method Search algorithm to use. One of:
 #'   \itemize{
-#'     \item \code{"greedy"} (default) — forward selection over a single pre-built pool
+#'     \item \code{"greedy"} (default) — forward selection, interaction candidates use \code{:}
+#'     \item \code{"greedy_star"} — same but interaction candidates use \code{*}, so main effects are always included with their interaction
 #'     \item \code{"greedy_alt"} — phased: first-order → polynomial (selected vars) → interactions (selected terms)
 #'     \item \code{"greedy_alt_full"} — same phases, but phase 3 considers interactions among all predictors
 #'     \item \code{"greedy_alt_fb"} — \code{greedy_alt} with forward-backward within each phase
@@ -77,7 +78,8 @@ mine <- function(data, response_var, model_func = lm,
                        method = "greedy") {
 
   if (!is.function(method)) {
-    method <- match.arg(method, c("greedy", "greedy_alt", "greedy_alt_full",
+    method <- match.arg(method, c("greedy", "greedy_star",
+                                   "greedy_alt", "greedy_alt_full",
                                    "greedy_alt_fb", "greedy_alt_full_fb",
                                    "forward_backward", "exhaustive"))
   }
@@ -176,6 +178,12 @@ mine <- function(data, response_var, model_func = lm,
     do.call(method, common_args)
   } else if (method == "greedy") {
     do.call(.mine_greedy, common_args)
+  } else if (method == "greedy_star") {
+    do.call(.mine_greedy_star,
+            c(common_args, list(predictor_vars    = predictor_vars,
+                                numeric_vars      = numeric_vars,
+                                max_degree        = max_degree,
+                                max_interact_vars = max_interact_vars)))
   } else if (method %in% c("greedy_alt", "greedy_alt_full",
                             "greedy_alt_fb", "greedy_alt_full_fb")) {
     do.call(.mine_greedy_alt,

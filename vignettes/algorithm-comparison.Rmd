@@ -14,18 +14,20 @@ library(modelminer)
 
 ## Methods
 
-| Method | Strategy |
-|--------|----------|
-| `greedy` | Forward selection over a single pre-built pool (all first-order, polynomial, and interaction candidates) |
-| `greedy_alt` | Phased: (1) first-order, (2) polynomials for selected variables, (3) interactions among selected terms |
-| `greedy_alt_full` | Same phases as `greedy_alt`, but phase 3 considers interactions among all predictors |
-| `greedy_alt_fb` | `greedy_alt` with forward-backward steps within each phase |
-| `greedy_alt_full_fb` | `greedy_alt_full` with forward-backward steps within each phase |
-| `forward_backward` | Forward-backward over a single pre-built pool |
+| Method | Interaction candidates | Notes |
+|--------|----------------------|-------|
+| `greedy` | `:` — interaction only | Standard greedy, single pool |
+| `greedy_star` | `*` — interaction + main effects | Main effects always accompany their interaction |
+| `greedy_alt` | `:` | Phased: first-order → polynomial → interactions among selected terms |
+| `greedy_alt_full` | `:` | Same phases; phase 3 uses all predictors for interactions |
+| `greedy_alt_fb` | `:` | `greedy_alt` with forward-backward within each phase |
+| `greedy_alt_full_fb` | `:` | `greedy_alt_full` with forward-backward within each phase |
+| `forward_backward` | `:` | Forward-backward over a single pool |
 
 ```{r configs}
 configs <- list(
   greedy             = list(method = "greedy"),
+  greedy_star        = list(method = "greedy_star"),
   greedy_alt         = list(method = "greedy_alt"),
   greedy_alt_full    = list(method = "greedy_alt_full"),
   greedy_alt_fb      = list(method = "greedy_alt_fb"),

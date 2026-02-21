@@ -38,7 +38,8 @@ Defaults to \code{FALSE}.}
 
 \item{method}{Search algorithm to use. One of:
 \itemize{
-  \item \code{"greedy"} (default) — forward selection over a single pre-built pool
+  \item \code{"greedy"} (default) — forward selection, interaction candidates use \code{:}
+  \item \code{"greedy_star"} — same but interaction candidates use \code{*}, so main effects are always included with their interaction
   \item \code{"greedy_alt"} — phased: first-order → polynomial (selected vars) → interactions (selected terms)
   \item \code{"greedy_alt_full"} — same phases, but phase 3 considers interactions among all predictors
   \item \code{"greedy_alt_fb"} — \code{greedy_alt} with forward-backward within each phase
