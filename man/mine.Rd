@@ -37,10 +37,12 @@ Defaults to \code{min}.}
 Defaults to \code{FALSE}.}
 
 \item{method}{Search algorithm to use. One of \code{"greedy"} (default),
-\code{"greedy_alt"} (phased: first-order → polynomial → interaction),
-or \code{"forward_backward"}. \code{"exhaustive"} is accepted but
-\strong{not yet implemented} — calling it will error immediately. May
-also be a custom search function — see Details.}
+\code{"greedy_alt"} (phased: first-order → polynomial → interactions
+among selected terms only), \code{"greedy_alt_full"} (same phases but
+phase 3 considers interactions among all predictors, catching variables
+that only matter inside an interaction), or \code{"forward_backward"}.
+\code{"exhaustive"} is accepted but \strong{not yet implemented} — calling
+it will error immediately. May also be a custom search function — see Details.}
 }
 \value{
 A list with four elements:

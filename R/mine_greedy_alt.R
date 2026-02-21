@@ -27,10 +27,18 @@
 # can sometimes find those cases because it considers the full pool at once.
 #
 # Returns list(Formula, all_models) matching the mine() contract.
+#
+# full_interactions: if FALSE (default, method = "greedy_alt"), phase 3 builds
+# interaction candidates only from terms already in the model after phase 2.
+# This means variables with no main-effect signal are excluded from interactions.
+# If TRUE (method = "greedy_alt_full"), phase 3 pools ALL predictor variables
+# together with any phase-2 polynomial terms, so a variable that only matters
+# inside an interaction can still be found.
 .mine_greedy_alt <- function(candidate_terms, current_formula, current_metric,
                               results, model_func, metric, metric_comparison,
                               data, predictor_vars, numeric_vars,
-                              max_degree, max_interact_vars) {
+                              max_degree, max_interact_vars,
+                              full_interactions = FALSE) {
 
   # candidate_terms is the pre-built global pool passed by mine() for all
   # other algorithms. It is not used here; each phase builds its own pool.
@@ -89,22 +97,41 @@
     cat("\n── Phase 2: skipped (no numeric variables selected in phase 1) ──\n")
   }
 
-  # ── Phase 3: interactions among selected terms ─────────────────────────────
+  # ── Phase 3: interactions ──────────────────────────────────────────────────
 
-  # Build the interaction pool from ALL term labels currently in the formula
-  # (first-order and polynomial alike). This means an interaction like
-  # hp:I(wt^2) is offered if both hp and I(wt^2) were selected.
+  # The pool of terms to combine into interactions differs by mode:
+  #
+  #   greedy_alt (full_interactions = FALSE):
+  #     Interactions are built from terms already in the model. A variable
+  #     that had no main-effect signal in phase 1 is absent from the model
+  #     and therefore absent from all interaction candidates. Cleaner pool,
+  #     but pure-interaction predictors are missed.
+  #
+  #   greedy_alt_full (full_interactions = TRUE):
+  #     Interactions are built from ALL predictor variables (regardless of
+  #     whether phase 1 selected them) plus any polynomial terms added in
+  #     phase 2. This lets pure-interaction predictors participate, at the
+  #     cost of a larger candidate pool that may include noisy interactions.
   current_term_labels <- attr(stats::terms(current_formula), "term.labels")
+  poly_in_model       <- grep("^I\\(", current_term_labels, value = TRUE)
+
+  interact_pool <- if (full_interactions) {
+    c(predictor_vars, poly_in_model)
+  } else {
+    current_term_labels
+  }
 
   interact_candidates <- character(0)
-  if (max_interact_vars > 1 && length(current_term_labels) >= 2) {
-    max_k <- min(max_interact_vars, length(current_term_labels))
+  if (max_interact_vars > 1 && length(interact_pool) >= 2) {
+    max_k <- min(max_interact_vars, length(interact_pool))
     for (i in seq_len(max_k - 1)) {
-      new_terms <- combn(current_term_labels, i + 1, function(vars) {
+      new_terms <- combn(interact_pool, i + 1, function(vars) {
         paste(vars, collapse = ":")
       })
       interact_candidates <- c(interact_candidates, new_terms)
     }
+    # Drop interactions that are already in the formula
+    interact_candidates <- setdiff(interact_candidates, current_term_labels)
   }
 
   if (length(interact_candidates) > 0) {
