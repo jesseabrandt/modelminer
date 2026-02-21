@@ -12,136 +12,99 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 library(modelminer)
 ```
 
-## Overview
-
-`modelminer` offers several search strategies for automated model building. They all use greedy forward selection as a backbone, but differ in how they construct and explore the candidate term pool:
+## Methods
 
 | Method | Strategy |
 |--------|----------|
-| `greedy` | Single pre-built pool (all first-order, polynomial, and interaction terms); one pass |
-| `greedy_alt` | Phased: (1) first-order, (2) polynomials on selected vars, (3) interactions among selected terms only |
-| `greedy_alt_full` | Same phases as `greedy_alt`, but phase 3 uses ALL predictors for interactions |
-| `greedy_alt_fb` | Same as `greedy_alt` with backward elimination steps within each phase |
-| `greedy_alt_full_fb` | Same as `greedy_alt_full` with backward elimination steps within each phase |
-| `forward_backward` | Single pre-built pool like `greedy`, but with backward elimination steps |
+| `greedy` | Forward selection over a single pre-built pool (all first-order, polynomial, and interaction candidates) |
+| `greedy_alt` | Phased: (1) first-order, (2) polynomials for selected variables, (3) interactions among selected terms |
+| `greedy_alt_full` | Same phases as `greedy_alt`, but phase 3 considers interactions among all predictors |
+| `greedy_alt_fb` | `greedy_alt` with forward-backward steps within each phase |
+| `greedy_alt_full_fb` | `greedy_alt_full` with forward-backward steps within each phase |
+| `forward_backward` | Forward-backward over a single pre-built pool |
 
-The phased methods (`greedy_alt*`) are more efficient but can miss signals that require interaction terms between variables with little individual main-effect signal. The `_full` variants address this by widening the interaction candidate pool in phase 3.
-
-We illustrate these trade-offs with three simulation scenarios.
+```{r configs}
+configs <- list(
+  greedy             = list(method = "greedy"),
+  greedy_alt         = list(method = "greedy_alt"),
+  greedy_alt_full    = list(method = "greedy_alt_full"),
+  greedy_alt_fb      = list(method = "greedy_alt_fb"),
+  greedy_alt_full_fb = list(method = "greedy_alt_full_fb"),
+  forward_backward   = list(method = "forward_backward")
+)
+```
 
 ---
 
-## Scenario 1: Main-Effects Signal
-
-**Setup**: The response is a linear combination of two predictors; no interactions or polynomial terms matter.
+## Scenario 1: Main-effects signal
 
 ```
 y = 2*x1 - 1.5*x2 + noise
 ```
 
-With only main effects driving the signal, phased methods should find the true model quickly. Standard `greedy` should find it too, but will evaluate more candidates along the way.
-
 ```{r scenario1-data}
 set.seed(101)
 n <- 80
-x1 <- rnorm(n); x2 <- rnorm(n); x3 <- rnorm(n); x4 <- rnorm(n)
-x5 <- rnorm(n); x6 <- rnorm(n); x7 <- rnorm(n); x8 <- rnorm(n)
-y  <- 2*x1 - 1.5*x2 + rnorm(n, sd = 1)
-dat1 <- data.frame(y, x1, x2, x3, x4, x5, x6, x7, x8)
+x1<-rnorm(n); x2<-rnorm(n); x3<-rnorm(n); x4<-rnorm(n)
+x5<-rnorm(n); x6<-rnorm(n); x7<-rnorm(n); x8<-rnorm(n)
+dat1 <- data.frame(y = 2*x1 - 1.5*x2 + rnorm(n, sd = 1),
+                   x1, x2, x3, x4, x5, x6, x7, x8)
 ```
 
 ```{r scenario1-run, results="hide"}
-configs1 <- list(
-  greedy           = list(method = "greedy"),
-  greedy_alt       = list(method = "greedy_alt"),
-  greedy_alt_full  = list(method = "greedy_alt_full"),
-  greedy_alt_fb    = list(method = "greedy_alt_fb"),
-  greedy_alt_full_fb = list(method = "greedy_alt_full_fb"),
-  forward_backward = list(method = "forward_backward")
-)
-cmp1 <- compare_methods(dat1, y, configs = configs1)
+cmp1 <- compare_methods(dat1, y, configs = configs)
 ```
 
 ```{r scenario1-results}
-cmp1$summary
+cmp1$summary[, c("Config", "BestMetric", "ModelsEvaluated", "Formula")]
 ```
-
-**Interpretation**: All methods should identify `x1` and `x2` as the key predictors. The phased methods typically evaluate fewer total models because the candidate pool is pruned at each phase. `greedy` and `forward_backward` evaluate the full expanded pool from the start, which costs more comparisons but is not harmful here since the signal is clean.
 
 ---
 
-## Scenario 2: Pure-Interaction Signal
-
-**Setup**: The response depends only on the *product* of two predictors; neither variable has any meaningful marginal (main-effect) signal.
+## Scenario 2: Pure-interaction signal
 
 ```
-y = x1*x3 + noise
+y = x1*x3 + noise   (no main effects)
 ```
-
-This is the critical test case distinguishing the phased methods. Because `x1` and `x3` have no individual signal:
-
-- **`greedy_alt`**: Phase 1 selects predictors by main effects. `x1` and `x3` are not selected, so they never enter the interaction pool in phase 3. The interaction `x1:x3` is never evaluated — the true signal is **missed**.
-- **`greedy_alt_full`**: Phase 3 uses ALL predictors for interactions, so `x1:x3` is always a candidate. The true signal is **found**.
-- **`greedy`** and **`forward_backward`**: Build a single pool containing all interactions upfront, so `x1:x3` is evaluated from the start.
 
 ```{r scenario2-data}
 set.seed(202)
 n <- 80
-x1 <- rnorm(n); x2 <- rnorm(n); x3 <- rnorm(n); x4 <- rnorm(n)
-x5 <- rnorm(n); x6 <- rnorm(n); x7 <- rnorm(n); x8 <- rnorm(n)
-y  <- x1*x3 + rnorm(n, sd = 0.5)
-dat2 <- data.frame(y, x1, x2, x3, x4, x5, x6, x7, x8)
+x1<-rnorm(n); x2<-rnorm(n); x3<-rnorm(n); x4<-rnorm(n)
+x5<-rnorm(n); x6<-rnorm(n); x7<-rnorm(n); x8<-rnorm(n)
+dat2 <- data.frame(y = x1*x3 + rnorm(n, sd = 0.5),
+                   x1, x2, x3, x4, x5, x6, x7, x8)
 ```
 
 ```{r scenario2-run, results="hide"}
-cmp2 <- compare_methods(dat2, y, configs = configs1)
+cmp2 <- compare_methods(dat2, y, configs = configs)
 ```
 
 ```{r scenario2-results}
-cmp2$summary
+cmp2$summary[, c("Config", "BestMetric", "ModelsEvaluated", "Formula")]
 ```
-
-**Interpretation**: The `BestMetric` (AIC) for `greedy_alt` and `greedy_alt_fb` should be noticeably worse than the other methods — they settle for a near-null model because neither `x1` nor `x3` clears the bar individually. The `_full` variants and the single-pool methods recover the interaction and achieve a much lower AIC. This scenario exposes the fundamental limitation of the phased approach when main-effect signal is absent.
 
 ---
 
-## Scenario 3: Mixed Signal
-
-**Setup**: The response combines a main effect, a polynomial term, and an interaction between two predictors with only weak individual signal.
+## Scenario 3: Mixed signal
 
 ```
 y = 2*x1 + x2^2 + x3*x4 + noise
 ```
 
-This tests all three phases of the phased methods simultaneously. `x1` has a strong main-effect signal (phase 1 should pick it up); `x2^2` requires phase 2; and `x3*x4` requires phase 3. Whether `x3` and `x4` survive phase 1 determines whether `greedy_alt` can recover the interaction.
-
 ```{r scenario3-data}
 set.seed(303)
 n <- 80
-x1 <- rnorm(n); x2 <- rnorm(n); x3 <- rnorm(n); x4 <- rnorm(n)
-x5 <- rnorm(n); x6 <- rnorm(n); x7 <- rnorm(n); x8 <- rnorm(n)
-y  <- 2*x1 + x2^2 + x3*x4 + rnorm(n, sd = 1)
-dat3 <- data.frame(y, x1, x2, x3, x4, x5, x6, x7, x8)
+x1<-rnorm(n); x2<-rnorm(n); x3<-rnorm(n); x4<-rnorm(n)
+x5<-rnorm(n); x6<-rnorm(n); x7<-rnorm(n); x8<-rnorm(n)
+dat3 <- data.frame(y = 2*x1 + x2^2 + x3*x4 + rnorm(n, sd = 1),
+                   x1, x2, x3, x4, x5, x6, x7, x8)
 ```
 
 ```{r scenario3-run, results="hide"}
-cmp3 <- compare_methods(dat3, y, configs = configs1)
+cmp3 <- compare_methods(dat3, y, configs = configs)
 ```
 
 ```{r scenario3-results}
-cmp3$summary
+cmp3$summary[, c("Config", "BestMetric", "ModelsEvaluated", "Formula")]
 ```
-
-**Interpretation**: Expect `greedy_alt_full` and the single-pool methods to fit the best models. `greedy_alt` may or may not recover `x3*x4` depending on whether `x3` and `x4` happen to clear phase 1 individually at this sample size. The `_fb` (forward-backward) variants sometimes improve on their non-backward counterparts by pruning spurious terms added early, leading to a cleaner final formula. Compare `ModelsEvaluated` across methods to appreciate the computational trade-off: more exhaustive search costs more evaluations but reduces the risk of missing important terms.
-
----
-
-## Summary
-
-The choice of method involves a **bias-variance trade-off in the search itself**:
-
-- Use **`greedy_alt`** or **`greedy_alt_fb`** when you believe the true model's interactions involve predictors that already show marginal signal. These are the fastest and least likely to overfit by chance.
-- Use **`greedy_alt_full`** or **`greedy_alt_full_fb`** when interactions among individually weak predictors are plausible. The wider phase-3 pool catches pure-interaction signals at modest additional cost.
-- Use **`greedy`** or **`forward_backward`** when you want a single exhaustive pass over all candidate terms with no phasing assumptions. `forward_backward` adds backward pruning to remove terms that become redundant after later additions.
-
-All methods return the same structure from `mine()` and are directly comparable via `compare_methods()`.
