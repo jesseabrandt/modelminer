@@ -25,8 +25,18 @@
 #' This lets you pass experimental ("draft") search implementations for comparison
 #' via \code{\link{compare_methods}}.
 #'
-#' @returns A list with two elements: \code{Formula} (the best formula found) and
-#'   \code{all_models} (a data frame of all evaluated formulas and their metric values).
+#' @returns A list with four elements:
+#'   \describe{
+#'     \item{\code{Formula}}{The best formula found, as a \code{formula} object.}
+#'     \item{\code{all_models}}{A data frame of every formula evaluated and its
+#'       metric value (list column, to support non-numeric metrics).}
+#'     \item{\code{model}}{The fitted model object for the best formula, ready
+#'       for \code{summary()}, \code{predict()}, \code{coef()}, etc.}
+#'     \item{\code{best_metric}}{The metric value for the best formula as a
+#'       plain numeric scalar.}
+#'     \item{\code{method}}{The search algorithm used (\code{"greedy"},
+#'       \code{"forward_backward"}, \code{"exhaustive"}, or \code{"custom"}).}
+#'   }
 #' @export
 #'
 #' @examples
@@ -152,7 +162,7 @@ mine <- function(data, response_var, model_func = lm,
     data              = data
   )
 
-  if (is.function(method)) {
+  result <- if (is.function(method)) {
     do.call(method, common_args)
   } else if (method == "greedy") {
     do.call(.mine_greedy, common_args)
@@ -164,4 +174,34 @@ mine <- function(data, response_var, model_func = lm,
     do.call(.mine_exhaustive,
             c(common_args, list(response_str = response_str)))
   }
+
+  # ---- Enrich and summarise result ----
+
+  # Refit the best formula so the caller gets a ready-to-use model object.
+  # Done here rather than inside each algorithm so the return structure is
+  # consistent regardless of which search was used.
+  result$model <- tryCatch(
+    model_func(result$Formula, data = data),
+    error = function(e) {
+      warning("Could not refit best model: ", conditionMessage(e), call. = FALSE)
+      NULL
+    }
+  )
+
+  result$best_metric <- if (!is.null(result$model)) {
+    tryCatch(metric(result$model), error = function(e) NA_real_)
+  } else {
+    NA_real_
+  }
+
+  # Record which algorithm produced this result — useful when results are
+  # collected by compare_methods() or inspected programmatically.
+  result$method <- if (is.function(method)) "custom" else method
+
+  cat("\n── Best formula ──────────────────────────\n")
+  cat("Formula:", deparse1(result$Formula), "\n")
+  cat("Metric: ", result$best_metric, "\n")
+  cat("─────────────────────────────────────────\n\n")
+
+  result
 }

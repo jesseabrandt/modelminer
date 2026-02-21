@@ -81,20 +81,10 @@ compare_methods <- function(data, response_var, configs, ...) {
                         BestMetric = NA_real_, ModelsEvaluated = NA_integer_,
                         stringsAsFactors = FALSE))
     }
-    best_formula_str <- deparse1(r$Formula)
-    # Look up the metric for the best formula by matching its deparsed string
-    # against the all_models table. deparse1() is deterministic for a given
-    # formula object, so the match should be exact. If it somehow fails (e.g.
-    # an environment-dependent formula), BestMetric will be NA rather than
-    # erroring out.
-    match_idx        <- which(r$all_models$Formula == best_formula_str)
-    best_metric_raw  <- if (length(match_idx) > 0) r$all_models$Metric[[match_idx[1]]] else NA
-    best_metric      <- if (is.numeric(best_metric_raw)) best_metric_raw else NA_real_
-
     data.frame(
       Config          = nm,
-      Formula         = best_formula_str,
-      BestMetric      = best_metric,
+      Formula         = deparse1(r$Formula),
+      BestMetric      = if (is.numeric(r$best_metric)) r$best_metric else NA_real_,
       ModelsEvaluated = nrow(r$all_models),
       stringsAsFactors = FALSE
     )

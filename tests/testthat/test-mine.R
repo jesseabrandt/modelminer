@@ -5,7 +5,7 @@ test_that("lm mine doesn't fail", {
 test_that("mine returns expected structure", {
   result <- mine(mtcars, mpg)
   expect_type(result, "list")
-  expect_named(result, c("Formula", "all_models"))
+  expect_named(result, c("Formula", "all_models", "model", "best_metric", "method"))
   expect_s3_class(result$Formula, "formula")
   expect_s3_class(result$all_models, "data.frame")
   expect_true("Formula" %in% names(result$all_models))

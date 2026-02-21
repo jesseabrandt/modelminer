@@ -41,8 +41,18 @@ Defaults to \code{FALSE}.}
 function — see Details.}
 }
 \value{
-A list with two elements: \code{Formula} (the best formula found) and
-  \code{all_models} (a data frame of all evaluated formulas and their metric values).
+A list with four elements:
+  \describe{
+    \item{\code{Formula}}{The best formula found, as a \code{formula} object.}
+    \item{\code{all_models}}{A data frame of every formula evaluated and its
+      metric value (list column, to support non-numeric metrics).}
+    \item{\code{model}}{The fitted model object for the best formula, ready
+      for \code{summary()}, \code{predict()}, \code{coef()}, etc.}
+    \item{\code{best_metric}}{The metric value for the best formula as a
+      plain numeric scalar.}
+    \item{\code{method}}{The search algorithm used (\code{"greedy"},
+      \code{"forward_backward"}, \code{"exhaustive"}, or \code{"custom"}).}
+  }
 }
 \description{
 Automated model selection with feature engineering
