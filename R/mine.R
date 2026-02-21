@@ -11,9 +11,10 @@
 #'   Defaults to \code{min}.
 #' @param keep_all_vars If \code{TRUE}, starts with all first-order terms in the formula.
 #'   Defaults to \code{FALSE}.
-#' @param method Search algorithm to use. One of \code{"greedy"} (default),
-#'   \code{"forward_backward"}, or \code{"exhaustive"}. May also be a custom search
-#'   function — see Details.
+#' @param method Search algorithm to use. One of \code{"greedy"} (default) or
+#'   \code{"forward_backward"}. \code{"exhaustive"} is accepted but \strong{not
+#'   yet implemented} — calling it will error immediately. May also be a custom
+#'   search function — see Details.
 #'
 #' @details
 #' When \code{method} is a function it must have the signature:

@@ -45,6 +45,9 @@ result <- mine(mtcars, mpg, method = "greedy")
 # Forward-backward — adds a term, then reconsiders removals each round
 result <- mine(mtcars, mpg, method = "forward_backward")
 
+# NOTE: "exhaustive" is accepted as an argument but not yet implemented.
+# Calling it will error immediately.
+
 # Pass a custom search function for experimental algorithms
 my_search <- function(candidate_terms, current_formula, current_metric,
                       results, model_func, metric, metric_comparison, data) {
