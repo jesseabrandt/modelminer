@@ -62,7 +62,7 @@
 
         results      <- rbind(results,
                               data.frame(Formula = deparse1(try_formula),
-                                         Metric  = I(list(try_metric))))
+                                         Metric  = try_metric))
         fwd_formulas <- c(fwd_formulas, deparse1(try_formula))
         fwd_metrics  <- c(fwd_metrics, list(try_metric))
         fwd_terms    <- c(fwd_terms, term)
@@ -122,7 +122,7 @@
 
         results      <- rbind(results,
                               data.frame(Formula = deparse1(try_formula),
-                                         Metric  = I(list(try_metric))))
+                                         Metric  = try_metric))
         bwd_formulas <- c(bwd_formulas, deparse1(try_formula))
         bwd_metrics  <- c(bwd_metrics, list(try_metric))
         bwd_removed  <- c(bwd_removed, term)

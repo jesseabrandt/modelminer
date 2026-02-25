@@ -52,7 +52,7 @@
 
       results        <- rbind(results,
                               data.frame(Formula = deparse1(next_formula),
-                                         Metric  = I(list(next_metric))))
+                                         Metric  = next_metric))
       round_formulas <- c(round_formulas, deparse1(next_formula))
       round_metrics  <- c(round_metrics, list(next_metric))
     }

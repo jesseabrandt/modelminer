@@ -161,7 +161,7 @@ mine <- function(data, response_var, model_func = lm,
 
   start_results <- data.frame(
     Formula = deparse1(start_formula),
-    Metric  = I(list(start_metric))
+    Metric  = start_metric
   )
 
   # ---- Dispatch to search algorithm ----
