@@ -13,7 +13,8 @@ mine(
   metric = AIC,
   metric_comparison = min,
   keep_all_vars = FALSE,
-  method = "greedy"
+  method = "greedy",
+  max_terms = NULL
 )
 }
 \arguments{
@@ -45,9 +46,12 @@ Defaults to \code{FALSE}.}
   \item \code{"greedy_alt_fb"} — \code{greedy_alt} with forward-backward within each phase
   \item \code{"greedy_alt_full_fb"} — \code{greedy_alt_full} with forward-backward within each phase
   \item \code{"forward_backward"} — forward-backward over a single pre-built pool
+  \item \code{"exhaustive"} — best-subset selection up to \code{max_terms} terms
 }
-\code{"exhaustive"} is accepted but \strong{not yet implemented}.
 May also be a custom search function — see Details.}
+
+\item{max_terms}{Maximum number of terms to include in a subset for the
+exhaustive method. Defaults to 5 if \code{NULL}. Ignored by other methods.}
 }
 \value{
 A list with four elements:

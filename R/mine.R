@@ -20,9 +20,11 @@
 #'     \item \code{"greedy_alt_fb"} — \code{greedy_alt} with forward-backward within each phase
 #'     \item \code{"greedy_alt_full_fb"} — \code{greedy_alt_full} with forward-backward within each phase
 #'     \item \code{"forward_backward"} — forward-backward over a single pre-built pool
+#'     \item \code{"exhaustive"} — best-subset selection up to \code{max_terms} terms
 #'   }
-#'   \code{"exhaustive"} is accepted but \strong{not yet implemented}.
 #'   May also be a custom search function — see Details.
+#' @param max_terms Maximum number of terms to include in a subset for the
+#'   exhaustive method. Defaults to 5 if \code{NULL}. Ignored by other methods.
 #'
 #' @details
 #' When \code{method} is a function it must have the signature:
@@ -52,12 +54,12 @@
 #' result <- mine(mtcars, mpg)
 #' result$Formula
 #' @importFrom rlang enexpr as_string
-#' @importFrom stats AIC as.formula lm
+#' @importFrom stats AIC as.formula lm formula hatvalues model.frame model.response predict residuals
 #' @importFrom utils combn
 mine <- function(data, response_var, model_func = lm,
                  max_degree = 3, max_interact_vars = 2, metric = AIC,
                  metric_comparison = min, keep_all_vars = FALSE,
-                 method = "greedy") {
+                 method = "greedy", max_terms = NULL) {
   response_str <- as_string(enexpr(response_var))
   .mine_impl(data, response_str,
              model_func        = model_func,
@@ -66,7 +68,8 @@ mine <- function(data, response_var, model_func = lm,
              metric            = metric,
              metric_comparison = metric_comparison,
              keep_all_vars     = keep_all_vars,
-             method            = method)
+             method            = method,
+             max_terms         = max_terms)
 }
 
 # Internal workhorse. Accepts response_var as a plain string rather than an
@@ -75,7 +78,7 @@ mine <- function(data, response_var, model_func = lm,
 .mine_impl <- function(data, response_str, model_func = lm,
                        max_degree = 3, max_interact_vars = 2, metric = AIC,
                        metric_comparison = min, keep_all_vars = FALSE,
-                       method = "greedy") {
+                       method = "greedy", max_terms = NULL) {
 
   if (!is.function(method)) {
     method <- match.arg(method, c("greedy", "greedy_star",
@@ -200,7 +203,8 @@ mine <- function(data, response_var, model_func = lm,
                                 initial_terms = initial_terms)))
   } else {
     do.call(.mine_exhaustive,
-            c(common_args, list(response_str = response_str)))
+            c(common_args, list(response_str = response_str,
+                                max_terms = max_terms)))
   }
 
   # ---- Enrich and summarise result ----

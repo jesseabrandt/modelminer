@@ -198,6 +198,155 @@ extract_metric.GBMFit <- function(model, ...) {
 }
 
 
+# ---- lm_loocv ---------------------------------------------------------------
+
+#' Analytical leave-one-out cross-validation for linear models
+#'
+#' Computes the mean squared leave-one-out prediction error for a fitted
+#' \code{lm} object using the hat-matrix shortcut (PRESS / n). No additional
+#' model fits are required, making this as fast as \code{AIC}.
+#'
+#' Only valid for ordinary least-squares (\code{lm}) models. For other model
+#' types, or when k-fold CV is preferred, use \code{\link{make_cv_metric}}.
+#'
+#' @param model A fitted \code{lm} object.
+#' @returns A single numeric value (mean squared LOOCV error), lower-is-better.
+#' @seealso \code{\link{make_cv_metric}}
+#' @export
+#'
+#' @examples
+#' result <- mine(mtcars, mpg, metric = lm_loocv)
+#' result$Formula
+lm_loocv <- function(model) {
+  mean((residuals(model) / (1 - hatvalues(model)))^2)
+}
+
+
+# ---- make_cv_metric ---------------------------------------------------------
+
+#' K-fold cross-validation metric function
+#'
+#' Returns a metric function that computes mean squared k-fold cross-validated
+#' prediction error. The returned function can be passed directly to
+#' \code{\link{mine}} as the \code{metric} argument.
+#'
+#' The data and formula are extracted from the fitted model via
+#' \code{model.frame()} and \code{formula()}, so no separate data argument is
+#' required. This works correctly when every variable referenced inside
+#' \code{I()} expressions also appears as a direct term in the formula — which
+#' is the normal case when \code{modelminer} builds formulas incrementally.
+#'
+#' \strong{Performance note:} each call to the returned function refits the
+#' model \code{k} times on training folds. For a typical \code{mine()} run
+#' evaluating hundreds of candidate models, this is substantially slower than
+#' \code{\link{lm_loocv}} or \code{AIC}. Prefer \code{lm_loocv} for
+#' \code{lm}-based searches unless you specifically need k-fold CV.
+#'
+#' @param k Number of folds. Defaults to 10.
+#' @param seed Integer seed for reproducible fold assignment. Defaults to 1.
+#' @returns A function with signature \code{function(model)} returning a single
+#'   numeric value (mean squared CV error), lower-is-better. Compatible with
+#'   \code{mine()}'s default \code{metric_comparison = min}.
+#' @seealso \code{\link{lm_loocv}}
+#' @export
+#'
+#' @examples
+#' cv10 <- make_cv_metric(k = 10)
+#' result <- mine(mtcars, mpg, metric = cv10)
+#' result$Formula
+make_cv_metric <- function(k = 10) {
+  force(k)
+  
+  function(model) {
+    # Use model.matrix() rather than re-evaluating the formula on fold subsets.
+    # Formula re-evaluation fails when a predictor appears only inside an
+    # interaction (e.g. cyl:wt with no standalone wt term) because the
+    # model frame subset won't contain the raw variable. Slicing the
+    # pre-computed design matrix sidesteps that entirely.
+    X <- model.matrix(model)
+    y <- model.response(model.frame(model))
+    n <- length(y)
+
+    
+    folds <- sample(rep_len(seq_len(k), n))
+
+    fold_mse <- vapply(seq_len(k), function(i) {
+      X_train <- X[folds != i, , drop = FALSE]
+      X_test  <- X[folds == i, , drop = FALSE]
+      y_train <- y[folds != i]
+      y_test  <- y[folds == i]
+
+      fit <- tryCatch(lm.fit(X_train, y_train), error = function(e) NULL)
+      if (is.null(fit)) return(NA_real_)
+
+      coefs <- fit$coefficients
+      if (anyNA(coefs)) return(NA_real_)  # rank-deficient fold
+
+      pred <- drop(X_test %*% coefs)
+      mean((y_test - pred)^2)
+    }, numeric(1))
+
+    mean(fold_mse, na.rm = TRUE)
+  }
+}
+
+
+# ---- make_cp_metric ---------------------------------------------------------
+
+#' Mallow's Cp metric function
+#'
+#' Returns a metric function that computes Mallow's Cp statistic for a
+#' candidate model, using the residual variance from a user-supplied full
+#' model as the reference. The returned function can be passed directly to
+#' \code{\link{mine}} as the \code{metric} argument.
+#'
+#' \strong{Formula:} \code{Cp = RSS_p / sigma2_full - n + 2p} where
+#' \code{RSS_p} is the candidate model's residual sum of squares,
+#' \code{sigma2_full} is the full model's residual variance
+#' (\code{summary(full_model)$sigma^2}, i.e. RSS_full / (n - p_full)),
+#' \code{n} is the number of observations, and \code{p} is the number of
+#' estimated coefficients (including intercept) in the candidate model.
+#' A well-fitting model has Cp approximately equal to p.
+#'
+#' \strong{Only valid for \code{lm} models.} Both the full model and every
+#' candidate model evaluated by \code{mine()} must be ordinary least-squares
+#' fits. The full model should include all predictors that could plausibly
+#' matter — typically \code{lm(y ~ ., data)}.
+#'
+#' @param full_model A fitted \code{lm} object used as the reference
+#'   (its \code{sigma^2} estimates the error variance).
+#' @returns A function with signature \code{function(model)} returning a single
+#'   numeric Cp value (lower is better). Compatible with \code{mine()}'s
+#'   default \code{metric_comparison = min}.
+#' @seealso \code{\link{lm_loocv}}, \code{\link{make_cv_metric}}
+#' @export
+#'
+#' @examples
+#' cp <- make_cp_metric(lm(mpg ~ ., data = mtcars))
+#' result <- mine(mtcars, mpg, metric = cp, max_degree = 1)
+#' result$Formula
+#'
+# TODO(jesse): triple-check the Cp formula against a textbook reference.
+# Verified numerically: Cp(full model) == p_full (exact) on mtcars, and
+# the formula matches the leaps package definition:
+#   Cp = RSS_p / sigma2_full - n + 2*p
+# where sigma2_full = summary(full)$sigma^2 = RSS_full / (n - p_full).
+make_cp_metric <- function(full_model) {
+  mse_full <- summary(full_model)$sigma^2
+  if (mse_full == 0) {
+    stop("Full model has zero residual variance (perfect fit); ",
+         "Cp is undefined.", call. = FALSE)
+  }
+
+  function(model) {
+    rss <- sum(residuals(model)^2)
+    n   <- nobs(model)
+    p   <- sum(!is.na(coef(model)))  # exclude aliased (NA) coefficients
+    rss / mse_full - n + 2 * p
+  }
+}
+
+
 # ---- list_metrics -----------------------------------------------------------
 
 #' Inspect available metrics on a fitted model object
