@@ -77,7 +77,7 @@
 
       results <- rbind(results,
                        data.frame(Formula = deparse1(try_formula),
-                                  Metric  = try_metric))
+                                  Metric  = I(list(try_metric))))
 
       comparison <- do.call(metric_comparison, list(best_metric, try_metric))
       if (!identical(comparison, best_metric)) {

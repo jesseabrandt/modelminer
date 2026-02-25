@@ -161,7 +161,7 @@ mine <- function(data, response_var, model_func = lm,
 
   start_results <- data.frame(
     Formula = deparse1(start_formula),
-    Metric  = start_metric
+    Metric  = I(list(start_metric))
   )
 
   # ---- Dispatch to search algorithm ----
@@ -205,6 +205,17 @@ mine <- function(data, response_var, model_func = lm,
     do.call(.mine_exhaustive,
             c(common_args, list(response_str = response_str,
                                 max_terms = max_terms)))
+  }
+
+  # ---- Simplify Metric column when possible ----
+  # During search, Metric is stored as a list column (I(list(...))) so it can
+  # hold arbitrary return types.  When every element is a length-1 numeric
+  # scalar — the overwhelmingly common case — unlist it to a plain numeric
+  # column for convenience.
+  m <- result$all_models$Metric
+  if (is.list(m) && all(vapply(m, function(x) is.numeric(x) && length(x) == 1L,
+                                logical(1)))) {
+    result$all_models$Metric <- unlist(m)
   }
 
   # ---- Enrich and summarise result ----
