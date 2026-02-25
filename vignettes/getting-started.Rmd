@@ -1,0 +1,161 @@
+---
+title: "Getting Started with modelminer"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting Started with modelminer}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>"
+)
+```
+
+## Overview
+
+`modelminer` automates forward model building by iteratively adding terms —
+polynomial expansions and interaction terms — that most improve a model
+selection metric. You supply a model function, a dataset, and a response
+variable; `mine()` explores the candidate term space and returns the best
+formula it finds.
+
+The default metric is AIC and the default search is greedy forward selection,
+but both are configurable. `mine()` accepts any model function with a
+`formula` and `data` interface, which covers `lm`, `glm`, and anything
+wrapped with `formula_wrap()`.
+
+---
+
+## Example 1: Linear model
+
+The simplest case — finding predictors of fuel economy in `mtcars`:
+
+```{r lm-example, results = "hide"}
+library(modelminer)
+
+lm_result <- mine(mtcars, mpg, max_degree = 2, max_interact_vars = 2)
+```
+
+```{r lm-result}
+lm_result$Formula
+```
+
+The `all_models` data frame records every formula evaluated during the search,
+including the metric value at each step. This is useful for inspecting the
+search path, diagnosing whether the algorithm stopped too early, or comparing
+how metric values evolved:
+
+```{r lm-all-models}
+head(lm_result$all_models[, "Formula", drop = FALSE])
+nrow(lm_result$all_models)
+```
+
+---
+
+## Example 2: Binomial GLM with an anonymous function
+
+`mine()` is not limited to `lm`. Any model function with a `formula` and
+`data` interface works. The `model_func` argument accepts anonymous functions,
+which is the natural way to fix extra arguments (like `family`) while keeping
+the signature compatible with what `mine()` expects.
+
+Here we search for predictors of transmission type in `mtcars` (`am`: 0 =
+automatic, 1 = manual):
+
+```{r glm-example, results = "hide", warning = FALSE}
+glm_result <- mine(
+  mtcars, am,
+  model_func        = \(formula, data) glm(formula, data, family = binomial),
+  max_degree        = 1,
+  max_interact_vars = 1
+)
+```
+
+```{r glm-result}
+glm_result$Formula
+```
+
+Because `glm` returns an object that `AIC()` understands, no change to the
+`metric` argument is needed. The anonymous function only needs to fix the
+`family` argument that `mine()` has no way to know about.
+
+> **Note on warnings:** Binomial GLMs commonly emit "fitted probabilities
+> numerically 0 or 1 occurred" when a strong predictor (like `wt` in `mtcars`)
+> separates the two classes nearly perfectly. This is a property of the data,
+> not the search algorithm. The model and AIC values are still valid for
+> selection purposes; it becomes a concern if you need reliable standard errors
+> or p-values from the final model.
+
+---
+
+## Example 3: Matrix-based models with `formula_wrap()`
+
+Some model functions don't accept a formula — `glmnet::cv.glmnet` takes a
+predictor matrix `x` and response vector `y` instead. `formula_wrap()` adapts
+such functions to `mine()`'s interface by extracting `x` and `y` from a data
+frame using the formula.
+
+The anonymous function pattern from Example 2 applies here too: use it to
+fix arguments the wrapper can't infer, such as the `family`.
+
+```{r glmnet-example, eval = FALSE}
+# Requires the glmnet package.
+# install.packages("glmnet")
+
+formula_cv_glmnet <- formula_wrap(
+  \(x, y, ...) glmnet::cv.glmnet(x, y, ...)
+)
+
+# cv.glmnet needs at least one predictor column, so keep_all_vars = TRUE
+# avoids passing an empty matrix for the intercept-only starting model.
+glmnet_result <- mine(
+  mtcars, mpg,
+  model_func        = formula_cv_glmnet,
+  metric            = \(m) min(m$cvm),   # minimum cross-validated MSE
+  metric_comparison = min,
+  keep_all_vars     = TRUE,
+  max_degree        = 1,
+  max_interact_vars = 1
+)
+
+glmnet_result$Formula
+```
+
+`formula_wrap()` assumes the wrapped function uses `x` and `y` as argument
+names (the `glmnet` convention). If your function uses different names, pass
+them as `x_name` and `y_name`:
+
+```{r formula-wrap-names, eval = FALSE}
+# Example for a hypothetical function that uses "predictors" and "outcome"
+formula_custom <- formula_wrap(my_model_func, x_name = "predictors", y_name = "outcome")
+```
+
+---
+
+## Comparing configurations with `compare_methods()`
+
+When experimenting with search settings — different algorithms, polynomial
+degrees, or interaction depth — `compare_methods()` runs multiple
+configurations and collects results in one call:
+
+```{r compare-example, results = "hide"}
+cmp <- compare_methods(
+  mtcars, mpg,
+  configs = list(
+    greedy_linear   = list(method = "greedy",          max_degree = 1),
+    greedy_poly     = list(method = "greedy",          max_degree = 3),
+    forward_backward = list(method = "forward_backward", max_degree = 1)
+  ),
+  max_interact_vars = 1
+)
+```
+
+```{r compare-result}
+cmp$summary[, c("Config", "Formula", "BestMetric", "ModelsEvaluated")]
+```
+
+The `details` element of the result holds the full `mine()` output for each
+configuration, so you can inspect `all_models` for any of them individually.

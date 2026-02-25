@@ -1,22 +1,29 @@
 Package: modelminer
 Type: Package
-Title: What the Package Does (Title Case)
+Title: Automated Model Selection with Feature Engineering
 Version: 0.1.0
 Authors@R: c(
     person(
-      "Jane", "Doe",
-      email = "jane@example.com",
+      "Jesse", "Brandt",
+      email = "jesse.a.brandt@gmail.com",
       role = c("aut", "cre")
     )
   )
-Description: More about what it does (maybe more than one line).
-    Continuation lines should be indented.
+Description: Automated forward model selection that searches over polynomial
+    terms and interaction terms to find the formula that best optimizes a
+    user-supplied metric (default: AIC). Supports greedy forward selection and
+    forward-backward stepwise search. Works with any model function that accepts
+    a formula and data argument, including lm, glm, and matrix-based models
+    adapted via formula_wrap().
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 7.3.1
+RoxygenNote: 7.3.3
 Imports:
     rlang
 Suggests:
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
 Config/testthat/edition: 3
