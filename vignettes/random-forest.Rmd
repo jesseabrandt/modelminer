@@ -1,0 +1,130 @@
+---
+title: "Using modelminer with randomForest"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Using modelminer with randomForest}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+pkgload::load_all()
+library(randomForest)
+```
+
+## Why feature selection for random forests?
+
+Random forests handle high-dimensional data and interactions natively, so feature
+selection is less critical than for linear models. Still, there are practical
+reasons to search over term sets:
+
+- **Interpretability.** A 3-predictor forest is easier to explain than a
+  10-predictor forest.
+- **Engineered features.** Explicit polynomial or interaction columns can
+  sometimes help the tree splits, especially with small data.
+- **Comparison.** Running the same `mine()` search on `lm` and `randomForest`
+  shows how the two model families differ on the same data.
+
+## Setup
+
+`randomForest` accepts `formula` + `data`, so it plugs directly into `mine()`
+as `model_func`. The one constraint is that `randomForest()` requires at least
+one predictor — it cannot fit an intercept-only model — so we use
+`keep_all_vars = TRUE` to start from all first-order terms.
+
+For the metric, we use the OOB (out-of-bag) mean squared error that
+`randomForest` computes automatically — no cross-validation loop needed:
+
+```{r metric}
+rf_oob_mse <- function(model) model$mse[model$ntree]
+```
+
+## Example: mtcars
+
+```{r mtcars-run, results = "hide"}
+set.seed(42)
+rf_result <- mine(
+  mtcars, mpg,
+  model_func        = randomForest,
+  metric            = rf_oob_mse,
+  keep_all_vars     = TRUE,
+  max_degree        = 2,
+  max_interact_vars = 2
+)
+```
+
+```{r mtcars-result}
+rf_result$Formula
+rf_result$best_metric
+nrow(rf_result$all_models)
+```
+
+## Comparison: lm vs randomForest
+
+We can run the same search with `lm` (using AIC) and compare which terms each
+model family selects:
+
+```{r compare, results = "hide"}
+set.seed(42)
+lm_result <- mine(
+  mtcars, mpg,
+  keep_all_vars     = TRUE,
+  max_degree        = 2,
+  max_interact_vars = 2
+)
+```
+
+```{r compare-result}
+data.frame(
+  model   = c("lm (AIC)", "randomForest (OOB MSE)"),
+  formula = c(deparse1(lm_result$Formula), deparse1(rf_result$Formula)),
+  metric  = c(lm_result$best_metric, rf_result$best_metric)
+)
+```
+
+## Synthetic data with a known interaction
+
+To test whether the search finds a known signal, we generate data where
+`y = x1 * x2 + noise` with 6 noise predictors:
+
+```{r synthetic-data}
+set.seed(99)
+n <- 200
+x1 <- rnorm(n); x2 <- rnorm(n)
+x3 <- rnorm(n); x4 <- rnorm(n)
+x5 <- rnorm(n); x6 <- rnorm(n)
+x7 <- rnorm(n); x8 <- rnorm(n)
+dat <- data.frame(
+  y = x1 * x2 + rnorm(n, sd = 0.5),
+  x1, x2, x3, x4, x5, x6, x7, x8
+)
+```
+
+```{r synthetic-run, results = "hide"}
+set.seed(42)
+rf_syn <- mine(
+  dat, y,
+  model_func        = randomForest,
+  metric            = rf_oob_mse,
+  keep_all_vars     = TRUE,
+  max_degree        = 1,
+  max_interact_vars = 2
+)
+```
+
+```{r synthetic-result}
+rf_syn$Formula
+rf_syn$best_metric
+```
+
+## Notes
+
+- **`keep_all_vars = TRUE` is required.** `randomForest()` errors on an
+  intercept-only formula, so the search must start with at least one predictor.
+- **OOB MSE varies across runs.** The forest is stochastic; set a seed for
+  reproducibility, or average over multiple seeds for more stable selection.
+- **Interactions are implicit.** Random forests capture interactions through
+  tree splits, so adding explicit `x1:x2` columns is redundant in many cases.
+  The search is more useful for identifying which *variables* matter than for
+  discovering interaction structure.
