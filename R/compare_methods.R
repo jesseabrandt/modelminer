@@ -17,8 +17,9 @@
 #'     \item{\code{summary}}{A data frame with one row per config: Config,
 #'       Formula, BestMetric (numeric; NA if non-numeric), and
 #'       ModelsEvaluated.}
-#'     \item{\code{details}}{A named list of the full \code{mine()} results
-#'       (each has \code{Formula} and \code{all_models}).}
+#'     \item{\code{details}}{A named list of the full \code{mine()} results.
+#'       Each element contains \code{Formula}, \code{all_models}, \code{model},
+#'       \code{best_metric}, and \code{method}.}
 #'   }
 #'
 #' @export

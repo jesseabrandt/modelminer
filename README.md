@@ -32,21 +32,39 @@ result$model        # fitted model object, ready for summary(), predict(), etc.
 - Polynomial terms up to `max_degree` (e.g. `I(wt^2)`, `I(wt^3)`)
 - Interaction terms up to `max_interact_vars` variables (e.g. `hp:wt`)
 
-It then searches this pool using one of three algorithms, adding (or removing) one term per step based on a model selection metric.
+It then searches this pool using a configurable strategy -- greedy forward selection, phased variants, forward-backward, pure backward elimination, or exhaustive best-subset -- adding or removing one term per step based on a model selection metric.
 
 ## Search Algorithms
 
 Set `method` to choose the search strategy:
 
 ```r
-# Greedy forward selection (default) — fast, path-dependent
+# Greedy forward selection (default) -- fast, path-dependent
 result <- mine(mtcars, mpg, method = "greedy")
 
-# Forward-backward — adds a term, then reconsiders removals each round
+# Greedy forward using * for interactions (bundles main effects with interaction)
+result <- mine(mtcars, mpg, method = "greedy_star")
+
+# Phased greedy: first-order -> polynomial -> interactions (selected terms only)
+result <- mine(mtcars, mpg, method = "greedy_alt")
+
+# Phased greedy, but phase 3 considers interactions among all predictors
+result <- mine(mtcars, mpg, method = "greedy_alt_full")
+
+# greedy_alt with forward-backward within each phase
+result <- mine(mtcars, mpg, method = "greedy_alt_fb")
+
+# greedy_alt_full with forward-backward within each phase
+result <- mine(mtcars, mpg, method = "greedy_alt_full_fb")
+
+# Forward step then backward step each round over a single pool
 result <- mine(mtcars, mpg, method = "forward_backward")
 
-# NOTE: "exhaustive" is accepted as an argument but not yet implemented.
-# Calling it will error immediately.
+# Pure backward elimination from all first-order predictors
+result <- mine(mtcars, mpg, method = "backward")
+
+# Exhaustive best-subset search (slower; guaranteed optimal within max_terms)
+result <- mine(mtcars, mpg, method = "exhaustive", max_terms = 5)
 
 # Pass a custom search function for experimental algorithms
 my_search <- function(candidate_terms, current_formula, current_metric,
@@ -63,10 +81,10 @@ Any model function that accepts `formula` and `data` arguments works out of the 
 ```r
 # Binomial GLM
 result <- mine(
-  data      = mtcars,
-  response  = am,
-  model_func = \(formula, data) glm(formula, data, family = binomial),
-  metric     = AIC
+  data         = mtcars,
+  response_var = am,
+  model_func   = \(formula, data) glm(formula, data, family = binomial),
+  metric       = AIC
 )
 ```
 
@@ -80,24 +98,26 @@ cv_glmnet <- formula_wrap(glmnet::cv.glmnet)
 
 result <- mine(
   data          = mtcars,
-  response      = mpg,
+  response_var  = mpg,
   model_func    = cv_glmnet,
   metric        = extract_metric,   # uses min(cvm) for cv.glmnet
   keep_all_vars = TRUE              # cv.glmnet needs at least one predictor
 )
 ```
 
-## Model-Embedded Metrics
+## Metric Helpers
+
+### Model-embedded metrics
 
 Many model types store their own fit metrics (OOB error, cross-validated loss, etc.) rather than supporting `AIC()`. Use `extract_metric()` as a drop-in `metric` argument:
 
 | Model class     | What `extract_metric()` returns              |
 |-----------------|----------------------------------------------|
 | `lm`, `glm`, ...| `AIC()` (default fallback)                   |
-| `cv.glmnet`     | `min(cvm)` — minimum mean CV error           |
-| `ranger`        | `prediction.error` — OOB prediction error    |
+| `cv.glmnet`     | `min(cvm)` -- minimum mean CV error          |
+| `ranger`        | `prediction.error` -- OOB prediction error   |
 | `randomForest`  | Last OOB error rate or MSE                   |
-| `rpart`         | `min(cptable[,"xerror"])` — min CV error     |
+| `rpart`         | `min(cptable[,"xerror"])` -- min CV error    |
 | `tree`          | Residual deviance                             |
 | `GBMFit` (gbm)  | `min(cv.error)`, falls back to train error   |
 
@@ -116,6 +136,22 @@ To extend `extract_metric` to a new class:
 extract_metric.my_class <- function(model, ...) model$my_loss_slot
 ```
 
+### Cross-validation and Cp metrics
+
+```r
+# k-fold cross-validated MSE (works with any lm-compatible model)
+cv5 <- make_cv_metric(k = 5, seed = 42)
+result <- mine(mtcars, mpg, metric = cv5)
+
+# Mallow's Cp (requires a full reference model)
+full <- lm(mpg ~ ., data = mtcars)
+cp <- make_cp_metric(full)
+result <- mine(mtcars, mpg, metric = cp)
+
+# Leave-one-out CV for lm models (fast, closed-form via hat matrix)
+result <- mine(mtcars, mpg, metric = lm_loocv)
+```
+
 ## Comparing Configurations
 
 `compare_methods()` runs multiple `mine()` configurations and returns a tidy summary:
@@ -124,9 +160,10 @@ extract_metric.my_class <- function(model, ...) model$my_loss_slot
 cmp <- compare_methods(
   mtcars, mpg,
   configs = list(
-    greedy_d1 = list(method = "greedy",          max_degree = 1),
-    greedy_d3 = list(method = "greedy",          max_degree = 3),
-    fwd_bwd   = list(method = "forward_backward", max_degree = 1)
+    greedy_d1 = list(method = "greedy",            max_degree = 1),
+    greedy_d3 = list(method = "greedy",            max_degree = 3),
+    fwd_bwd   = list(method = "forward_backward",  max_degree = 1),
+    backward  = list(method = "backward",          max_degree = 1)
   ),
   max_interact_vars = 1
 )
@@ -145,17 +182,18 @@ cmp$details     # named list of full mine() results per config
 | `metric`           | `AIC`       | Function mapping a model to a numeric score               |
 | `metric_comparison`| `min`       | `min` for lower-is-better, `max` for higher-is-better     |
 | `keep_all_vars`    | `FALSE`     | Start from all first-order terms instead of intercept-only|
-| `method`           | `"greedy"`  | `"greedy"`, `"forward_backward"`, or a custom function    |
+| `method`           | `"greedy"`  | Search algorithm (see above) or a custom function         |
+| `max_terms`        | `NULL` (5)  | Max subset size for `method = "exhaustive"`               |
 
 ## Return Value
 
 `mine()` returns a named list:
 
-- `$Formula` — best formula found, as a `formula` object
-- `$all_models` — data frame of every formula evaluated and its metric
-- `$model` — fitted model for the best formula (ready for `summary()`, `predict()`, etc.)
-- `$best_metric` — numeric metric value for the best formula
-- `$method` — search algorithm used
+- `$Formula` -- best formula found, as a `formula` object
+- `$all_models` -- data frame of every formula evaluated and its metric
+- `$model` -- fitted model for the best formula (ready for `summary()`, `predict()`, etc.)
+- `$best_metric` -- numeric metric value for the best formula
+- `$method` -- search algorithm used (`"greedy"`, `"backward"`, `"custom"`, etc.)
 
 ## Development
 

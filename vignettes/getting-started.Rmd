@@ -16,8 +16,8 @@ knitr::opts_chunk$set(
 
 ## Overview
 
-`modelminer` automates forward model building by iteratively adding terms —
-polynomial expansions and interaction terms — that most improve a model
+`modelminer` automates stepwise model building -- iteratively adding or
+removing polynomial expansions and interaction terms -- that most improve a model
 selection metric. You supply a model function, a dataset, and a response
 variable; `mine()` explores the candidate term space and returns the best
 formula it finds.
