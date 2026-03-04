@@ -73,7 +73,7 @@ compare_methods <- function(data, response_var, configs, ...) {
   })
   names(details) <- names(configs)
 
-  # Build summary table — one row per config
+  # Build summary table -- one row per config
   rows <- lapply(names(details), function(nm) {
     r <- details[[nm]]
     if (is.null(r)) {

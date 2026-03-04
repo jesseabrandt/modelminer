@@ -9,12 +9,12 @@ Authors@R: c(
       role = c("aut", "cre")
     )
   )
-Description: Automated forward model selection that searches over polynomial
-    terms and interaction terms to find the formula that best optimizes a
-    user-supplied metric (default: AIC). Supports greedy forward selection and
-    forward-backward stepwise search. Works with any model function that accepts
-    a formula and data argument, including lm, glm, and matrix-based models
-    adapted via formula_wrap().
+Description: Automated model selection that searches over polynomial terms and
+    interaction terms to find the formula that best optimizes a user-supplied
+    metric (default: AIC). Supports greedy forward selection, forward-backward
+    stepwise search, backward elimination, and phased greedy variants. Works
+    with any model function that accepts a formula and data argument, including
+    lm, glm, and matrix-based models adapted via formula_wrap().
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
@@ -24,6 +24,10 @@ Imports:
 Suggests:
     testthat (>= 3.0.0),
     knitr,
-    rmarkdown
+    rmarkdown,
+    rpart,
+    tree,
+    randomForest,
+    e1071
 VignetteBuilder: knitr
 Config/testthat/edition: 3

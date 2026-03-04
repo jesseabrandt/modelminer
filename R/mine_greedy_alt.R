@@ -3,15 +3,15 @@
 # Works in three sequential phases, each building its candidate pool from what
 # the previous phase produced rather than searching a single pre-built pool:
 #
-#   Phase 1 — first-order:
+#   Phase 1 -- first-order:
 #     Selection over plain predictor variables. Establishes which variables
 #     have any marginal signal at all.
 #
-#   Phase 2 — polynomial:
+#   Phase 2 -- polynomial:
 #     Selection over polynomial terms, but ONLY for variables selected in
 #     phase 1. No point offering I(x^k) if x itself did not improve the model.
 #
-#   Phase 3 — interaction:
+#   Phase 3 -- interaction:
 #     Selection over interactions built from terms in the model after phase 2.
 #     With full_interactions = FALSE (default), only already-selected terms
 #     participate, so the pool is small and clean but pure-interaction
@@ -21,7 +21,7 @@
 #
 # do_backward controls whether each phase uses forward-only (.greedy_phase) or
 # forward-backward (.greedy_phase_fb) search. The backward step within a phase
-# can only remove terms that phase added — terms from earlier phases are locked
+# can only remove terms that phase added -- terms from earlier phases are locked
 # in. This keeps phases independent and avoids phase 2 undoing phase 1.
 #
 # Returns list(Formula, all_models) matching the mine() contract.
@@ -39,7 +39,7 @@
   # response_str is only needed for do_backward = TRUE (the forward-backward
   # helper uses .build_formula(), which requires the response name as a string).
 
-  # ── Phase runner: dispatch to forward-only or forward-backward ──────────────
+  # -- Phase runner: dispatch to forward-only or forward-backward --------------
 
   run_phase <- if (do_backward) {
     function(candidates, prior_terms, ...) {
@@ -53,9 +53,9 @@
     }
   }
 
-  # ── Phase 1: first-order terms ─────────────────────────────────────────────
+  # -- Phase 1: first-order terms ---------------------------------------------
 
-  cat("\n── Phase 1: first-order terms ──\n")
+  message("\n-- Phase 1: first-order terms --")
   phase1 <- run_phase(
     candidates        = predictor_vars,
     prior_terms       = character(0),
@@ -71,7 +71,7 @@
   current_metric  <- phase1$metric
   results         <- phase1$results
 
-  # ── Phase 2: polynomial terms for selected variables only ──────────────────
+  # -- Phase 2: polynomial terms for selected variables only ------------------
 
   selected_base_vars <- intersect(
     attr(stats::terms(current_formula), "term.labels"),
@@ -92,7 +92,7 @@
   prior_after_1 <- attr(stats::terms(current_formula), "term.labels")
 
   if (length(poly_candidates) > 0) {
-    cat("\n── Phase 2: polynomial terms ──\n")
+    message("\n-- Phase 2: polynomial terms --")
     phase2 <- run_phase(
       candidates        = poly_candidates,
       prior_terms       = prior_after_1,
@@ -108,10 +108,10 @@
     current_metric  <- phase2$metric
     results         <- phase2$results
   } else {
-    cat("\n── Phase 2: skipped (no numeric variables selected in phase 1) ──\n")
+    message("\n-- Phase 2: skipped (no numeric variables selected in phase 1) --")
   }
 
-  # ── Phase 3: interactions ──────────────────────────────────────────────────
+  # -- Phase 3: interactions --------------------------------------------------
 
   # The pool of terms to combine into interactions differs by mode:
   #
@@ -148,7 +148,7 @@
   prior_after_2 <- current_term_labels
 
   if (length(interact_candidates) > 0) {
-    cat("\n── Phase 3: interaction terms ──\n")
+    message("\n-- Phase 3: interaction terms --")
     phase3 <- run_phase(
       candidates        = interact_candidates,
       prior_terms       = prior_after_2,
@@ -161,16 +161,17 @@
       data              = data
     )
     current_formula <- phase3$formula
+    current_metric  <- phase3$metric
     results         <- phase3$results
   } else {
-    cat("\n── Phase 3: skipped (fewer than 2 terms selected) ──\n")
+    message("\n-- Phase 3: skipped (fewer than 2 terms selected) --")
   }
 
   list(Formula = current_formula, all_models = results)
 }
 
 
-# ── .greedy_phase: forward-only pass ─────────────────────────────────────────
+# -- .greedy_phase: forward-only pass -----------------------------------------
 #
 # One greedy forward selection pass over a fixed candidate set.
 # Shared by all forward-only phases of .mine_greedy_alt.
@@ -209,7 +210,7 @@
       )
       if (is.null(next_metric)) next
 
-      cat("Formula:", deparse1(next_formula), "Metric:", next_metric, "\n")
+      message("Formula: ", deparse1(next_formula), " Metric: ", next_metric)
 
       results        <- rbind(results,
                               data.frame(Formula = deparse1(next_formula),
@@ -240,11 +241,11 @@
 }
 
 
-# ── .greedy_phase_fb: forward-backward pass ───────────────────────────────────
+# -- .greedy_phase_fb: forward-backward pass -----------------------------------
 #
 # Forward-backward selection within a single phase's candidate set.
 #
-# prior_terms: terms in the model from earlier phases — these are LOCKED and
+# prior_terms: terms in the model from earlier phases -- these are LOCKED and
 #   cannot be removed by this phase's backward step. Only terms this phase
 #   adds are eligible for removal. This keeps phases independent: phase 2
 #   cannot undo phase 1 decisions, which would make the sequencing meaningless.
@@ -295,7 +296,7 @@
         )
         if (is.null(try_metric)) next
 
-        cat("[fwd] Formula:", deparse1(try_formula), "Metric:", try_metric, "\n")
+        message("[fwd] Formula: ", deparse1(try_formula), " Metric: ", try_metric)
 
         results      <- rbind(results,
                               data.frame(Formula = deparse1(try_formula),
@@ -327,7 +328,7 @@
     # ---- Backward step (phase_terms only) -----------------------------------
     #
     # Only terms this phase added are eligible for removal. prior_terms (from
-    # earlier phases) are never touched — removing them would invalidate the
+    # earlier phases) are never touched -- removing them would invalidate the
     # phased structure (e.g. phase 2 dropping a phase-1 main effect mid-search).
 
     if (length(phase_terms) > 0) {
@@ -359,7 +360,7 @@
         )
         if (is.null(try_metric)) next
 
-        cat("[bwd] Formula:", deparse1(try_formula), "Metric:", try_metric, "\n")
+        message("[bwd] Formula: ", deparse1(try_formula), " Metric: ", try_metric)
 
         results      <- rbind(results,
                               data.frame(Formula = deparse1(try_formula),

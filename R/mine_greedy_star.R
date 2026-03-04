@@ -3,10 +3,10 @@
 # Identical to .mine_greedy in structure, but the interaction part of the
 # candidate pool uses * instead of :. The difference matters:
 #
-#   a:b  — adds only the interaction term. If a and b are not already in the
+#   a:b  -- adds only the interaction term. If a and b are not already in the
 #           model, the result is an interaction without its main effects.
 #
-#   a*b  — adds a + b + a:b in one step. Main effects are always present
+#   a*b  -- adds a + b + a:b in one step. Main effects are always present
 #           alongside their interaction, so the model stays hierarchically
 #           correct regardless of what was selected before.
 #
@@ -15,7 +15,7 @@
 # useful, the : approach can find that more precisely; * forces the bundle.
 #
 # Candidate pruning note: after adding a*b, attr(terms(), "term.labels")
-# returns ["a", "b", "a:b"] — not "a*b". The *-string itself must be removed
+# returns ["a", "b", "a:b"] -- not "a*b". The *-string itself must be removed
 # from the candidate pool explicitly by tracking which candidate was selected.
 # That is what round_terms does below.
 #
@@ -78,7 +78,7 @@
       )
       if (is.null(next_metric)) next
 
-      cat("Formula:", deparse1(next_formula), "Metric:", next_metric, "\n")
+      message("Formula: ", deparse1(next_formula), " Metric: ", next_metric)
 
       results        <- rbind(results,
                               data.frame(Formula = deparse1(next_formula),
@@ -103,7 +103,7 @@
 
       # Prune by expanded term labels (covers first-order and : components of
       # any * term that was selected) AND by the original candidate string
-      # itself (since "a*b" does not appear in term.labels — only "a", "b",
+      # itself (since "a*b" does not appear in term.labels -- only "a", "b",
       # "a:b" do).
       used_terms      <- c(attr(stats::terms(current_formula), "term.labels"),
                            round_terms[best_idx])

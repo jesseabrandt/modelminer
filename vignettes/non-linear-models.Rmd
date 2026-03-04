@@ -1,0 +1,514 @@
+---
+title: "Using modelminer with non-linear models"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Using modelminer with non-linear models}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+library(modelminer)
+library(tree)
+library(rpart)
+library(randomForest)
+library(e1071)
+```
+
+## Does stepwise selection make sense for non-linear models?
+
+Tree-based models and SVMs handle nonlinearity and variable selection
+internally, so running a stepwise search on top of them is not obviously
+useful. Whether it helps in practice likely depends on the data and the
+model. This vignette doesn't try to settle that question — it just shows
+that `mine()` works with these model functions and what the results look
+like.
+
+## Metrics
+
+Each model family needs a metric that `mine()` can extract from a fitted
+model.  Lower is better for all of these:
+
+```{r metrics}
+# tree: residual deviance (built-in generic)
+# rpart: cross-validated relative error from the complexity table
+rpart_xerror <- function(model) min(model$cptable[, "xerror"])
+# randomForest: out-of-bag MSE (last tree in the sequence)
+rf_oob_mse <- function(model) model$mse[model$ntree]
+# svm: training residual MSE
+svm_mse <- function(model) mean(model$residuals^2)
+```
+
+`tree` uses the standard `deviance()` generic, so no wrapper is needed.
+`svm` stores residuals on the fitted object, so the wrapper just squares and
+averages them.
+
+## Compatibility notes
+
+Not every formula feature works with every model function:
+
+| Feature | `lm` | `tree` | `rpart` | `randomForest` | `svm` |
+|---|---|---|---|---|---|
+| Intercept-only (`y ~ 1`) | yes | yes | **no** | **no** | **no** |
+| Polynomial (`I(x^2)`) | yes | yes | yes | only when `x` is a main effect | yes |
+| Interaction (`x1:x2`) | yes | **no** | **no** | yes | yes |
+
+`mine()` handles these differences automatically:
+
+- When the intercept-only model fails (`rpart`, `randomForest`), `mine()`
+  falls back to the best single-predictor model.
+- Interaction terms that a model function rejects are skipped with a warning
+  and the search continues.
+
+For `rpart` and `tree`, set `max_interact_vars = 0` to avoid pointless
+warnings from attempted interaction terms.
+
+## Example: mtcars
+
+### Decision tree (`tree`)
+
+`tree()` accepts an intercept-only starting model, so `mine()` can begin
+from `mpg ~ 1` and build up:
+
+```{r tree-run, results = "hide"}
+tree_result <- mine(
+  mtcars, mpg,
+  model_func        = tree,
+  metric            = deviance,
+  max_degree        = 2,
+  max_interact_vars = 0
+)
+```
+
+```{r tree-result}
+tree_result$Formula
+tree_result$best_metric
+```
+
+### Recursive partitioning (`rpart`)
+
+`rpart()` cannot fit an intercept-only model, so `mine()` automatically
+falls back to the best single-predictor starting point:
+
+```{r rpart-run, results = "hide"}
+rpart_result <- mine(
+  mtcars, mpg,
+  model_func        = rpart,
+  metric            = rpart_xerror,
+  max_degree        = 2,
+  max_interact_vars = 0
+)
+```
+
+```{r rpart-result}
+rpart_result$Formula
+rpart_result$best_metric
+```
+
+### Random forest
+
+`randomForest()` also needs the single-predictor fallback.  Because the
+forest is stochastic, we set a seed for reproducibility:
+
+```{r rf-run, results = "hide"}
+set.seed(42)
+rf_result <- mine(
+  mtcars, mpg,
+  model_func        = randomForest,
+  metric            = rf_oob_mse,
+  max_degree        = 2,
+  max_interact_vars = 2
+)
+```
+
+```{r rf-result}
+rf_result$Formula
+rf_result$best_metric
+```
+
+### Support vector machine (`e1071::svm`)
+
+`svm()` also cannot fit an intercept-only model, so the single-predictor
+fallback kicks in.  SVM accepts both polynomial terms and interactions:
+
+```{r svm-run, results = "hide"}
+svm_result <- mine(
+  mtcars, mpg,
+  model_func        = svm,
+  metric            = svm_mse,
+  max_degree        = 2,
+  max_interact_vars = 2
+)
+```
+
+```{r svm-result}
+svm_result$Formula
+svm_result$best_metric
+```
+
+## Comparison: all five model families
+
+Running the same search with `lm` (AIC) alongside the tree and SVM methods
+shows how different model families select different features from the same data:
+
+```{r lm-run, results = "hide"}
+lm_result <- mine(
+  mtcars, mpg,
+  max_degree        = 2,
+  max_interact_vars = 2
+)
+```
+
+```{r comparison}
+data.frame(
+  model   = c("lm (AIC)", "tree (deviance)",
+              "rpart (xerror)", "randomForest (OOB MSE)",
+              "svm (MSE)"),
+  formula = c(deparse1(lm_result$Formula),    deparse1(tree_result$Formula),
+              deparse1(rpart_result$Formula),  deparse1(rf_result$Formula),
+              deparse1(svm_result$Formula)),
+  n_terms = c(length(attr(terms(lm_result$Formula), "term.labels")),
+              length(attr(terms(tree_result$Formula), "term.labels")),
+              length(attr(terms(rpart_result$Formula), "term.labels")),
+              length(attr(terms(rf_result$Formula), "term.labels")),
+              length(attr(terms(svm_result$Formula), "term.labels")))
+)
+```
+
+The model families pick noticeably different subsets. `lm` pulls in
+interactions and polynomials; the single-tree methods stay compact;
+`randomForest` and `svm` fall somewhere in between.
+
+## Backward elimination
+
+The examples above all use greedy forward selection — starting from a small
+model and adding terms.  `method = "backward"` does the opposite: it starts
+from all predictors and removes the least useful one each round until no
+removal improves the metric.
+
+Backward elimination is a natural fit for tree-based models because it
+sidesteps the intercept-only fallback entirely — the search always begins
+with every predictor in the formula.
+
+```{r backward-lm, results = "hide"}
+bwd_lm <- mine(
+  mtcars, mpg,
+  method            = "backward",
+  max_degree        = 1,
+  max_interact_vars = 0
+)
+```
+
+```{r backward-tree, results = "hide"}
+bwd_tree <- mine(
+  mtcars, mpg,
+  model_func        = tree,
+  metric            = deviance,
+  method            = "backward",
+  max_degree        = 1,
+  max_interact_vars = 0
+)
+```
+
+```{r backward-rpart, results = "hide"}
+bwd_rpart <- mine(
+  mtcars, mpg,
+  model_func        = rpart,
+  metric            = rpart_xerror,
+  method            = "backward",
+  max_degree        = 1,
+  max_interact_vars = 0
+)
+```
+
+```{r backward-rf, results = "hide"}
+set.seed(42)
+bwd_rf <- mine(
+  mtcars, mpg,
+  model_func        = randomForest,
+  metric            = rf_oob_mse,
+  method            = "backward",
+  max_degree        = 1,
+  max_interact_vars = 0
+)
+```
+
+```{r backward-svm, results = "hide"}
+bwd_svm <- mine(
+  mtcars, mpg,
+  model_func        = svm,
+  metric            = svm_mse,
+  method            = "backward",
+  max_degree        = 1,
+  max_interact_vars = 0
+)
+```
+
+### Forward vs backward on mtcars
+
+To compare fairly, we run forward selection with matching settings
+(`max_degree = 1`, `max_interact_vars = 0`):
+
+```{r fwd-for-comparison, results = "hide"}
+set.seed(42)
+fwd_lm <- mine(mtcars, mpg, max_degree = 1, max_interact_vars = 0)
+fwd_tree <- mine(mtcars, mpg, model_func = tree, metric = deviance,
+                 max_degree = 1, max_interact_vars = 0)
+fwd_rpart <- mine(mtcars, mpg, model_func = rpart, metric = rpart_xerror,
+                  max_degree = 1, max_interact_vars = 0)
+fwd_rf <- mine(mtcars, mpg, model_func = randomForest, metric = rf_oob_mse,
+               max_degree = 1, max_interact_vars = 0)
+fwd_svm <- mine(mtcars, mpg, model_func = svm, metric = svm_mse,
+                max_degree = 1, max_interact_vars = 0)
+```
+
+```{r forward-vs-backward}
+full_mtcars <- mpg ~ cyl + disp + hp + drat + wt + qsec + vs + am + gear + carb
+
+set.seed(42)
+data.frame(
+  model   = c("lm (AIC)", "tree (deviance)",
+              "rpart (xerror)", "randomForest (OOB MSE)",
+              "svm (MSE)"),
+  forward_formula  = c(deparse1(fwd_lm$Formula), deparse1(fwd_tree$Formula),
+                       deparse1(fwd_rpart$Formula), deparse1(fwd_rf$Formula),
+                       deparse1(fwd_svm$Formula)),
+  backward_formula = c(deparse1(bwd_lm$Formula), deparse1(bwd_tree$Formula),
+                       deparse1(bwd_rpart$Formula), deparse1(bwd_rf$Formula),
+                       deparse1(bwd_svm$Formula)),
+  fwd_metric  = c(fwd_lm$best_metric, fwd_tree$best_metric,
+                  fwd_rpart$best_metric, fwd_rf$best_metric,
+                  fwd_svm$best_metric),
+  bwd_metric  = c(bwd_lm$best_metric, bwd_tree$best_metric,
+                  bwd_rpart$best_metric, bwd_rf$best_metric,
+                  bwd_svm$best_metric),
+  full_metric = c(
+    AIC(lm(full_mtcars, data = mtcars)),
+    deviance(tree(full_mtcars, data = mtcars)),
+    rpart_xerror(rpart(full_mtcars, data = mtcars)),
+    rf_oob_mse(randomForest(full_mtcars, data = mtcars)),
+    svm_mse(svm(full_mtcars, data = mtcars))
+  )
+)
+```
+
+Forward and backward often select different subsets.  Forward starts sparse
+and may get stuck once a mediocre predictor is in the model; backward starts
+full and may keep predictors that only help marginally.  Neither dominates —
+comparing both is a useful sanity check.
+
+## Selected vs full formula
+
+A natural question: does the search actually improve on just using every
+predictor?  We can check by fitting each model family twice — once with the
+`mine()`-selected formula and once with all predictors — and comparing on
+the same metric.
+
+To keep the candidate pool identical across methods, this comparison uses
+first-order terms only (`max_degree = 1`, `max_interact_vars = 0`):
+
+```{r vs-full-run, results = "hide"}
+set.seed(42)
+sel_lm <- mine(mtcars, mpg, max_degree = 1, max_interact_vars = 0)
+sel_tr <- mine(mtcars, mpg, model_func = tree,   metric = deviance,
+               max_degree = 1, max_interact_vars = 0)
+sel_rp <- mine(mtcars, mpg, model_func = rpart,  metric = rpart_xerror,
+               max_degree = 1, max_interact_vars = 0)
+sel_rf <- mine(mtcars, mpg, model_func = randomForest, metric = rf_oob_mse,
+               max_degree = 1, max_interact_vars = 0)
+sel_sv <- mine(mtcars, mpg, model_func = svm, metric = svm_mse,
+               max_degree = 1, max_interact_vars = 0)
+```
+
+```{r vs-full-compare}
+full <- mpg ~ cyl + disp + hp + drat + wt + qsec + vs + am + gear + carb
+
+set.seed(42)
+data.frame(
+  model = c("lm (AIC)", "tree (deviance)",
+            "rpart (xerror)", "randomForest (OOB MSE)",
+            "svm (MSE)"),
+  selected = c(
+    AIC(lm(sel_lm$Formula, data = mtcars)),
+    deviance(tree(sel_tr$Formula, data = mtcars)),
+    rpart_xerror(rpart(sel_rp$Formula, data = mtcars)),
+    rf_oob_mse(randomForest(sel_rf$Formula, data = mtcars)),
+    svm_mse(svm(sel_sv$Formula, data = mtcars))
+  ),
+  full = c(
+    AIC(lm(full, data = mtcars)),
+    deviance(tree(full, data = mtcars)),
+    rpart_xerror(rpart(full, data = mtcars)),
+    rf_oob_mse(randomForest(full, data = mtcars)),
+    svm_mse(svm(full, data = mtcars))
+  )
+)
+```
+
+On mtcars the selected formula wins on every metric, including the
+out-of-sample ones (`rpart` xerror is cross-validated; `randomForest` OOB
+MSE is computed on held-out bags).  This is a small dataset (n = 32) with
+heavy collinearity — exactly the setting where dropping redundant predictors
+helps most.  On larger data with more independent signals the gap would
+likely shrink.
+
+## Synthetic data with a known interaction
+
+To stress-test the comparison, we generate data where `y = x1 * x2 + noise`
+with 6 noise predictors.  The true signal is a pure interaction, so model
+functions that can represent interactions (explicitly or through splits)
+have an advantage.
+
+```{r synthetic-data}
+set.seed(99)
+n <- 200
+x1 <- rnorm(n); x2 <- rnorm(n)
+x3 <- rnorm(n); x4 <- rnorm(n)
+x5 <- rnorm(n); x6 <- rnorm(n)
+x7 <- rnorm(n); x8 <- rnorm(n)
+dat <- data.frame(
+  y = x1 * x2 + rnorm(n, sd = 0.5),
+  x1, x2, x3, x4, x5, x6, x7, x8
+)
+```
+
+```{r synthetic-run, results = "hide"}
+set.seed(42)
+syn_lm <- mine(dat, y, max_degree = 1, max_interact_vars = 2)
+syn_tr <- mine(dat, y, model_func = tree, metric = deviance,
+               max_degree = 1, max_interact_vars = 0)
+syn_rp <- mine(dat, y, model_func = rpart, metric = rpart_xerror,
+               max_degree = 1, max_interact_vars = 0)
+syn_rf <- mine(dat, y, model_func = randomForest, metric = rf_oob_mse,
+               max_degree = 1, max_interact_vars = 2)
+syn_sv <- mine(dat, y, model_func = svm, metric = svm_mse,
+               max_degree = 1, max_interact_vars = 2)
+```
+
+```{r synthetic-formulas}
+data.frame(
+  model   = c("lm", "tree", "rpart", "randomForest", "svm"),
+  formula = c(deparse1(syn_lm$Formula), deparse1(syn_tr$Formula),
+              deparse1(syn_rp$Formula), deparse1(syn_rf$Formula),
+              deparse1(syn_sv$Formula))
+)
+```
+
+Selected vs full on the same synthetic data:
+
+```{r synthetic-vs-full}
+syn_full <- y ~ x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8
+
+set.seed(42)
+data.frame(
+  model = c("lm (AIC)", "tree (deviance)",
+            "rpart (xerror)", "randomForest (OOB MSE)",
+            "svm (MSE)"),
+  selected = c(
+    AIC(lm(syn_lm$Formula, data = dat)),
+    deviance(tree(syn_tr$Formula, data = dat)),
+    rpart_xerror(rpart(syn_rp$Formula, data = dat)),
+    rf_oob_mse(randomForest(syn_rf$Formula, data = dat)),
+    svm_mse(svm(syn_sv$Formula, data = dat))
+  ),
+  full = c(
+    AIC(lm(syn_full, data = dat)),
+    deviance(tree(syn_full, data = dat)),
+    rpart_xerror(rpart(syn_full, data = dat)),
+    rf_oob_mse(randomForest(syn_full, data = dat)),
+    svm_mse(svm(syn_full, data = dat))
+  )
+)
+```
+
+The results are more mixed than mtcars.  `lm` benefits dramatically because
+it cannot represent the `x1 * x2` interaction unless the search discovers
+it.  `randomForest` improves modestly with the explicit interaction term.
+`tree` ties — it finds the same splits regardless of extra columns.
+`rpart` does worse: the greedy search started from a noise predictor
+(via the single-predictor fallback) and never recovered, while the full
+formula gave `rpart` access to `x1` and `x2` from the start.
+
+This illustrates a real limitation of greedy forward selection — the
+starting point matters, and the fallback heuristic is not guaranteed to
+pick a good one.
+
+### Backward on synthetic data
+
+Backward elimination avoids the starting-point problem because it begins
+from all predictors.  On this dataset, `rpart` benefits — it starts with
+`x1` and `x2` in the formula rather than depending on the single-predictor
+fallback:
+
+```{r synthetic-backward, results = "hide"}
+set.seed(42)
+syn_bwd_lm <- mine(dat, y, method = "backward",
+                   max_degree = 1, max_interact_vars = 0)
+syn_bwd_tr <- mine(dat, y, model_func = tree, metric = deviance,
+                   method = "backward",
+                   max_degree = 1, max_interact_vars = 0)
+syn_bwd_rp <- mine(dat, y, model_func = rpart, metric = rpart_xerror,
+                   method = "backward",
+                   max_degree = 1, max_interact_vars = 0)
+syn_bwd_rf <- mine(dat, y, model_func = randomForest, metric = rf_oob_mse,
+                   method = "backward",
+                   max_degree = 1, max_interact_vars = 0)
+syn_bwd_sv <- mine(dat, y, model_func = svm, metric = svm_mse,
+                   method = "backward",
+                   max_degree = 1, max_interact_vars = 0)
+```
+
+```{r synthetic-backward-compare}
+set.seed(42)
+data.frame(
+  model   = c("lm (AIC)", "tree (deviance)",
+              "rpart (xerror)", "randomForest (OOB MSE)",
+              "svm (MSE)"),
+  forward  = c(syn_lm$best_metric, syn_tr$best_metric,
+               syn_rp$best_metric, syn_rf$best_metric,
+               syn_sv$best_metric),
+  backward = c(syn_bwd_lm$best_metric, syn_bwd_tr$best_metric,
+               syn_bwd_rp$best_metric, syn_bwd_rf$best_metric,
+               syn_bwd_sv$best_metric),
+  full     = c(
+    AIC(lm(syn_full, data = dat)),
+    deviance(tree(syn_full, data = dat)),
+    rpart_xerror(rpart(syn_full, data = dat)),
+    rf_oob_mse(randomForest(syn_full, data = dat)),
+    svm_mse(svm(syn_full, data = dat))
+  )
+)
+```
+
+Backward elimination gives `rpart` a fair shot at the true signal and
+typically matches or beats forward selection across model families on this
+dataset.
+
+## Notes
+
+- **Automatic fallback.** `rpart()`, `randomForest()`, and `svm()` cannot
+  fit intercept-only models.  `mine()` detects the failure and selects the
+  best single-predictor starting point automatically.  Pass
+  `keep_all_vars = TRUE` to start from all predictors instead, or use
+  `method = "backward"` which always starts from all predictors.
+- **Backward elimination.** `method = "backward"` starts from the full model
+  and prunes down.  This avoids the intercept-only fallback entirely, making
+  it especially useful for model functions that cannot fit sparse formulas.
+- **No interactions for single trees.** `tree()` and `rpart()` reject
+  interaction terms in the formula.  Use `max_interact_vars = 0` when
+  working with these model functions.
+- **OOB MSE varies across runs.** Random forests are stochastic; set a seed
+  for reproducibility, or average over multiple seeds for more stable
+  selection.
+- **Deviance for `tree`.** The `deviance()` generic returns the residual
+  sum of squares for regression trees.  It works as a built-in metric
+  without a custom wrapper.
+- **Cross-validation for `rpart`.** The `cptable` in an `rpart` model
+  contains cross-validated error estimates.  The `rpart_xerror` wrapper
+  above extracts the minimum, which accounts for tree complexity
+  automatically.
+- **SVM residual MSE.** `svm()` stores training residuals on the fitted
+  object.  The `svm_mse` wrapper computes the mean squared residual.  This
+  is a training metric — for honest evaluation, consider cross-validated
+  error instead.

@@ -1,8 +1,8 @@
 # Forward-backward stepwise model selection.
 #
 # Each iteration runs two steps in sequence:
-#   Forward  — try adding each candidate term; keep the best improvement.
-#   Backward — try removing each term currently in the model; keep the best
+#   Forward  -- try adding each candidate term; keep the best improvement.
+#   Backward -- try removing each term currently in the model; keep the best
 #              improvement (or no change if none helps).
 # The iteration repeats until neither step changes the model.
 #
@@ -30,12 +30,15 @@
 
     # ---- Forward step ----
 
-    if (length(candidate_terms) > 0) {
+    # Only offer I(var^k) when var is already in the formula (marginality).
+    fwd_candidates <- .eligible_candidates(candidate_terms, current_formula)
+
+    if (length(fwd_candidates) > 0) {
       fwd_formulas <- character(0)
       fwd_metrics  <- list()
       fwd_terms    <- character(0)  # which candidate was trialled for each entry
 
-      for (term in candidate_terms) {
+      for (term in fwd_candidates) {
         try_formula <- .build_formula(response_str, c(added_terms, term))
 
         try_model <- tryCatch(
@@ -58,7 +61,7 @@
         )
         if (is.null(try_metric)) next
 
-        cat("[fwd] Formula:", deparse1(try_formula), "Metric:", try_metric, "\n")
+        message("[fwd] Formula: ", deparse1(try_formula), " Metric: ", try_metric)
 
         results      <- rbind(results,
                               data.frame(Formula = deparse1(try_formula),
@@ -118,7 +121,7 @@
         )
         if (is.null(try_metric)) next
 
-        cat("[bwd] Formula:", deparse1(try_formula), "Metric:", try_metric, "\n")
+        message("[bwd] Formula: ", deparse1(try_formula), " Metric: ", try_metric)
 
         results      <- rbind(results,
                               data.frame(Formula = deparse1(try_formula),

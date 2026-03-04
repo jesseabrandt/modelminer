@@ -1,7 +1,7 @@
 # Helpers for extracting model-embedded metrics
 #
 # These helpers are specifically for metrics that are stored ON the model
-# object itself — OOB error, cross-validated loss, residual deviance, etc.
+# object itself -- OOB error, cross-validated loss, residual deviance, etc.
 # They are NOT needed for externally-computed metrics like AIC or BIC:
 # those already work as-is because lm, glm, gam, coxph, lmer, and friends
 # all respond to stats::AIC(), which is mine()'s default metric.
@@ -13,7 +13,7 @@
 # anonymous function instead:
 #
 #   metric = \(m) min(m$cptable[, "rel error"])   # training error instead of CV
-#   metric = \(m) m$rsq[length(m$rsq)]            # OOB R² from randomForest
+#   metric = \(m) m$rsq[length(m$rsq)]            # OOB R^2 from randomForest
 #
 # Use list_metrics() interactively to see what slots a model exposes before
 # deciding whether the default is appropriate.
@@ -31,7 +31,7 @@
 #'
 #' \strong{Default method:} calls \code{AIC()}, covering \code{lm},
 #' \code{glm}, \code{gam}, \code{coxph}, \code{lmer}, and other standard
-#' R model classes. For those you do not need \code{extract_metric} at all —
+#' R model classes. For those you do not need \code{extract_metric} at all --
 #' \code{metric = AIC} (the default) already handles them.
 #'
 #' \strong{Adding support for a new class:}
@@ -44,6 +44,8 @@
 #' @param ... Reserved for future method arguments.
 #' @returns A single numeric value, lower-is-better.
 #' @seealso \code{\link{list_metrics}}
+#' @importFrom stats coef lm.fit nobs
+#' @importFrom utils tail
 #' @export
 extract_metric <- function(model, ...) UseMethod("extract_metric")
 
@@ -92,7 +94,7 @@ extract_metric.cv.glmnet <- function(model, ...) min(model$cvm)
 # All are lower-is-better. OOB is computed during training at no extra cost.
 #
 # Alternatives:
-#   \(m) 1 - m$r.squared   # OOB 1 - R² (regression only; negated so lower=better)
+#   \(m) 1 - m$r.squared   # OOB 1 - R^2 (regression only; negated so lower=better)
 #
 #' @export
 extract_metric.ranger <- function(model, ...) {
@@ -117,7 +119,7 @@ extract_metric.ranger <- function(model, ...) {
 #   \(m) tail(m$err.rate[, "class_name"], 1)   # per-class OOB error rate
 #
 # Alternatives (regression):
-#   \(m) 1 - tail(m$rsq, 1)   # OOB 1 - R² (negated so lower = better)
+#   \(m) 1 - tail(m$rsq, 1)   # OOB 1 - R^2 (negated so lower = better)
 #
 #' @export
 extract_metric.randomForest <- function(model, ...) {
@@ -139,7 +141,7 @@ extract_metric.randomForest <- function(model, ...) {
 # xerror is preferred for model selection because it estimates generalisation.
 #
 # The full CP table has columns: CP, nsplit, rel error, xerror, xstd.
-# xstd is the standard error of xerror — useful for the "1-SE rule" (pick the
+# xstd is the standard error of xerror -- useful for the "1-SE rule" (pick the
 # simplest tree within 1 SE of the minimum xerror).
 #
 # Alternatives:
@@ -158,7 +160,7 @@ extract_metric.rpart <- function(model, ...) {
 # tree (tree::tree) --------------------------------------------------------
 #
 # Default: residual deviance stored on the fitted object.
-# This is the training deviance — not cross-validated — so it will favour
+# This is the training deviance -- not cross-validated -- so it will favour
 # larger trees. For proper selection, fit with tree::cv.tree() and wrap
 # that instead.
 #
@@ -172,8 +174,8 @@ extract_metric.tree <- function(model, ...) model$dev
 # gbm (gbm::gbm) -----------------------------------------------------------
 #
 # Default: minimum cross-validated loss (requires cv.folds > 0 at fit time).
-# The loss type depends on the distribution argument: gaussian → MSE,
-# bernoulli → log-loss, adaboost → exponential loss, etc.
+# The loss type depends on the distribution argument: gaussian -> MSE,
+# bernoulli -> log-loss, adaboost -> exponential loss, etc.
 #
 # Falls back to training loss with a warning if no CV was run, but training
 # loss always decreases with more trees and is unreliable for selection.
@@ -233,7 +235,7 @@ lm_loocv <- function(model) {
 #' The data and formula are extracted from the fitted model via
 #' \code{model.frame()} and \code{formula()}, so no separate data argument is
 #' required. This works correctly when every variable referenced inside
-#' \code{I()} expressions also appears as a direct term in the formula — which
+#' \code{I()} expressions also appears as a direct term in the formula -- which
 #' is the normal case when \code{modelminer} builds formulas incrementally.
 #'
 #' \strong{Performance note:} each call to the returned function refits the
@@ -254,9 +256,10 @@ lm_loocv <- function(model) {
 #' cv10 <- make_cv_metric(k = 10)
 #' result <- mine(mtcars, mpg, metric = cv10)
 #' result$Formula
-make_cv_metric <- function(k = 10) {
+make_cv_metric <- function(k = 10, seed = 1L) {
   force(k)
-  
+  force(seed)
+
   function(model) {
     # Use model.matrix() rather than re-evaluating the formula on fold subsets.
     # Formula re-evaluation fails when a predictor appears only inside an
@@ -267,7 +270,7 @@ make_cv_metric <- function(k = 10) {
     y <- model.response(model.frame(model))
     n <- length(y)
 
-    
+    set.seed(seed)
     folds <- sample(rep_len(seq_len(k), n))
 
     fold_mse <- vapply(seq_len(k), function(i) {
@@ -311,7 +314,7 @@ make_cv_metric <- function(k = 10) {
 #' \strong{Only valid for \code{lm} models.} Both the full model and every
 #' candidate model evaluated by \code{mine()} must be ordinary least-squares
 #' fits. The full model should include all predictors that could plausibly
-#' matter — typically \code{lm(y ~ ., data)}.
+#' matter -- typically \code{lm(y ~ ., data)}.
 #'
 #' @param full_model A fitted \code{lm} object used as the reference
 #'   (its \code{sigma^2} estimates the error variance).

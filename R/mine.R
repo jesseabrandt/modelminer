@@ -13,16 +13,17 @@
 #'   Defaults to \code{FALSE}.
 #' @param method Search algorithm to use. One of:
 #'   \itemize{
-#'     \item \code{"greedy"} (default) — forward selection, interaction candidates use \code{:}
-#'     \item \code{"greedy_star"} — same but interaction candidates use \code{*}, so main effects are always included with their interaction
-#'     \item \code{"greedy_alt"} — phased: first-order → polynomial (selected vars) → interactions (selected terms)
-#'     \item \code{"greedy_alt_full"} — same phases, but phase 3 considers interactions among all predictors
-#'     \item \code{"greedy_alt_fb"} — \code{greedy_alt} with forward-backward within each phase
-#'     \item \code{"greedy_alt_full_fb"} — \code{greedy_alt_full} with forward-backward within each phase
-#'     \item \code{"forward_backward"} — forward-backward over a single pre-built pool
-#'     \item \code{"exhaustive"} — best-subset selection up to \code{max_terms} terms
+#'     \item \code{"greedy"} (default) -- forward selection, interaction candidates use \code{:}
+#'     \item \code{"greedy_star"} -- same but interaction candidates use \code{*}, so main effects are always included with their interaction
+#'     \item \code{"greedy_alt"} -- phased: first-order, polynomial (selected vars), interactions (selected terms)
+#'     \item \code{"greedy_alt_full"} -- same phases, but phase 3 considers interactions among all predictors
+#'     \item \code{"greedy_alt_fb"} -- \code{greedy_alt} with forward-backward within each phase
+#'     \item \code{"greedy_alt_full_fb"} -- \code{greedy_alt_full} with forward-backward within each phase
+#'     \item \code{"forward_backward"} -- forward-backward over a single pre-built pool
+#'     \item \code{"backward"} -- pure backward elimination from all predictors
+#'     \item \code{"exhaustive"} -- best-subset selection up to \code{max_terms} terms
 #'   }
-#'   May also be a custom search function — see Details.
+#'   May also be a custom search function -- see Details.
 #' @param max_terms Maximum number of terms to include in a subset for the
 #'   exhaustive method. Defaults to 5 if \code{NULL}. Ignored by other methods.
 #'
@@ -36,7 +37,7 @@
 #' This lets you pass experimental ("draft") search implementations for comparison
 #' via \code{\link{compare_methods}}.
 #'
-#' @returns A list with four elements:
+#' @returns A list with five elements:
 #'   \describe{
 #'     \item{\code{Formula}}{The best formula found, as a \code{formula} object.}
 #'     \item{\code{all_models}}{A data frame of every formula evaluated and its
@@ -46,7 +47,10 @@
 #'     \item{\code{best_metric}}{The metric value for the best formula as a
 #'       plain numeric scalar.}
 #'     \item{\code{method}}{The search algorithm used (\code{"greedy"},
-#'       \code{"forward_backward"}, \code{"exhaustive"}, or \code{"custom"}).}
+#'       \code{"greedy_star"}, \code{"greedy_alt"}, \code{"greedy_alt_full"},
+#'       \code{"greedy_alt_fb"}, \code{"greedy_alt_full_fb"},
+#'       \code{"forward_backward"}, \code{"backward"}, \code{"exhaustive"},
+#'       or \code{"custom"}).}
 #'   }
 #' @export
 #'
@@ -54,7 +58,7 @@
 #' result <- mine(mtcars, mpg)
 #' result$Formula
 #' @importFrom rlang enexpr as_string
-#' @importFrom stats AIC as.formula lm formula hatvalues model.frame model.response predict residuals
+#' @importFrom stats AIC as.formula lm hatvalues model.frame model.response residuals
 #' @importFrom utils combn
 mine <- function(data, response_var, model_func = lm,
                  max_degree = 3, max_interact_vars = 2, metric = AIC,
@@ -84,7 +88,8 @@ mine <- function(data, response_var, model_func = lm,
     method <- match.arg(method, c("greedy", "greedy_star",
                                    "greedy_alt", "greedy_alt_full",
                                    "greedy_alt_fb", "greedy_alt_full_fb",
-                                   "forward_backward", "exhaustive"))
+                                   "forward_backward", "backward",
+                                   "exhaustive"))
   }
 
   # ---- Shared setup: candidate term pool ----
@@ -105,7 +110,7 @@ mine <- function(data, response_var, model_func = lm,
   }
 
   # Interaction terms are generated with : rather than *, so each candidate
-  # represents only the interaction itself — no implicit main effects.
+  # represents only the interaction itself -- no implicit main effects.
   # This keeps the search strict: one term added or removed per step, and
   # added_terms bookkeeping in forward_backward stays unambiguous.
   #
@@ -138,33 +143,109 @@ mine <- function(data, response_var, model_func = lm,
     initial_terms <- character(0)
   }
 
-  # A failed starting model is fatal: there is no baseline metric to improve
-  # on, so the search cannot proceed. Per-term failures later are non-fatal
-  # (the term is skipped with a warning) because the search can still continue
-  # with the remaining candidates.
+  # Backward elimination must start from all predictors.
+  if (identical(method, "backward") && !keep_all_vars) {
+    start_formula <- as.formula(paste(response_str, "~",
+                                      paste(predictor_vars, collapse = " + ")))
+    initial_terms <- predictor_vars
+  }
+
+  # Try the starting model. If keep_all_vars = FALSE and the intercept-only
+  # model fails (e.g. randomForest needs >= 1 predictor), fall back to the
+  # best single-predictor model.  When keep_all_vars = TRUE the failure stays
+  # fatal because the user explicitly asked for all vars -- silently dropping
+  # them would be surprising.
   start_model <- tryCatch(
     model_func(start_formula, data = data),
-    error = function(e) {
-      stop("Failed to fit starting model: ", conditionMessage(e), call. = FALSE)
+    error = function(e) e
+  )
+
+  start_metric <- if (!inherits(start_model, "error")) {
+    tryCatch(metric(start_model), error = function(e) e)
+  } else {
+    start_model  # propagate the error
+  }
+
+  intercept_ok <- !inherits(start_model, "error") &&
+                  !inherits(start_metric, "error")
+
+  if (!intercept_ok && keep_all_vars) {
+    # Fatal -- user asked for all vars, no silent fallback.
+    msg <- if (inherits(start_model, "error"))
+      conditionMessage(start_model) else conditionMessage(start_metric)
+    stop("Failed to fit starting model: ", msg, call. = FALSE)
+  }
+
+  start_results <- data.frame(Formula = character(0),
+                               Metric  = I(list()))
+
+  if (intercept_ok) {
+    message("Formula: ", deparse1(start_formula), " Metric: ", start_metric)
+    start_results <- data.frame(
+      Formula = deparse1(start_formula),
+      Metric  = I(list(start_metric))
+    )
+  } else {
+    # ---- Single-predictor fallback ----
+    message("Intercept-only model failed; trying each predictor individually...")
+    fallback_metrics  <- list()
+    fallback_formulas <- list()
+
+    for (var in predictor_vars) {
+      f <- as.formula(paste(response_str, "~", var))
+      m <- tryCatch(model_func(f, data = data), error = function(e) {
+        warning("Fallback: could not fit ", deparse1(f), ": ",
+                conditionMessage(e), call. = FALSE)
+        NULL
+      })
+      if (is.null(m)) next
+
+      mv <- tryCatch(metric(m), error = function(e) {
+        warning("Fallback: could not compute metric for ", deparse1(f), ": ",
+                conditionMessage(e), call. = FALSE)
+        NULL
+      })
+      if (is.null(mv)) next
+
+      message("Formula: ", deparse1(f), " Metric: ", mv)
+      fallback_formulas[[length(fallback_formulas) + 1L]] <- f
+      fallback_metrics[[length(fallback_metrics) + 1L]]   <- mv
+      start_results <- rbind(start_results,
+                              data.frame(Formula = deparse1(f),
+                                         Metric  = I(list(mv))))
     }
-  )
 
-  start_metric <- tryCatch(
-    metric(start_model),
-    error = function(e) {
-      stop("Failed to compute metric for starting model: ",
-           conditionMessage(e), call. = FALSE)
-    }
-  )
+    if (length(fallback_metrics) == 0L)
+      stop("No single-predictor model could be fit. Cannot proceed.",
+           call. = FALSE)
 
-  cat("Formula:", deparse(start_formula), "Metric:", start_metric, "\n")
+    best_idx      <- which(vapply(fallback_metrics, identical,
+                                   logical(1),
+                                   do.call(metric_comparison, fallback_metrics)))
+    best_idx      <- best_idx[1L]
+    start_formula <- fallback_formulas[[best_idx]]
+    start_metric  <- fallback_metrics[[best_idx]]
+    initial_terms <- all.vars(start_formula[[3]])
 
-  start_results <- data.frame(
-    Formula = deparse1(start_formula),
-    Metric  = I(list(start_metric))
-  )
+    message("Selected fallback starting model: ", deparse1(start_formula),
+            " (metric: ", start_metric, ")")
+  }
 
   # ---- Dispatch to search algorithm ----
+
+  candidate_terms <- setdiff(candidate_terms, initial_terms)
+
+  # Backward elimination only removes terms from the starting formula; any
+
+  # polynomial or interaction candidates that were built are unused.
+  if (identical(method, "backward") && length(candidate_terms) > 0) {
+    warning(
+      "method = 'backward' starts from first-order predictors only. ",
+      length(candidate_terms), " polynomial/interaction candidate(s) from ",
+      "max_degree/max_interact_vars were built but will not be used.",
+      call. = FALSE
+    )
+  }
 
   common_args <- list(
     candidate_terms   = candidate_terms,
@@ -201,6 +282,10 @@ mine <- function(data, response_var, model_func = lm,
     do.call(.mine_forward_backward,
             c(common_args, list(response_str = response_str,
                                 initial_terms = initial_terms)))
+  } else if (method == "backward") {
+    do.call(.mine_backward,
+            c(common_args, list(response_str  = response_str,
+                                initial_terms = initial_terms)))
   } else {
     do.call(.mine_exhaustive,
             c(common_args, list(response_str = response_str,
@@ -210,7 +295,7 @@ mine <- function(data, response_var, model_func = lm,
   # ---- Simplify Metric column when possible ----
   # During search, Metric is stored as a list column (I(list(...))) so it can
   # hold arbitrary return types.  When every element is a length-1 numeric
-  # scalar — the overwhelmingly common case — unlist it to a plain numeric
+  # scalar -- the overwhelmingly common case -- unlist it to a plain numeric
   # column for convenience.
   m <- result$all_models$Metric
   if (is.list(m) && all(vapply(m, function(x) is.numeric(x) && length(x) == 1L,
@@ -237,14 +322,14 @@ mine <- function(data, response_var, model_func = lm,
     NA_real_
   }
 
-  # Record which algorithm produced this result — useful when results are
+  # Record which algorithm produced this result -- useful when results are
   # collected by compare_methods() or inspected programmatically.
   result$method <- if (is.function(method)) "custom" else method
 
-  cat("\n── Best formula ──────────────────────────\n")
-  cat("Formula:", deparse1(result$Formula), "\n")
-  cat("Metric: ", result$best_metric, "\n")
-  cat("─────────────────────────────────────────\n\n")
+  message("\n-- Best formula ------------------------------------------")
+  message("Formula: ", deparse1(result$Formula))
+  message("Metric:  ", result$best_metric)
+  message("----------------------------------------------------------\n")
 
   result
 }

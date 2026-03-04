@@ -24,7 +24,7 @@ as \code{mine()}'s \code{metric} argument. Dispatches on the model's class.
 
 \strong{Default method:} calls \code{AIC()}, covering \code{lm},
 \code{glm}, \code{gam}, \code{coxph}, \code{lmer}, and other standard
-R model classes. For those you do not need \code{extract_metric} at all —
+R model classes. For those you do not need \code{extract_metric} at all --
 \code{metric = AIC} (the default) already handles them.
 
 \strong{Adding support for a new class:}

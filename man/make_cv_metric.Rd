@@ -4,7 +4,7 @@
 \alias{make_cv_metric}
 \title{K-fold cross-validation metric function}
 \usage{
-make_cv_metric(k = 10)
+make_cv_metric(k = 10, seed = 1L)
 }
 \arguments{
 \item{k}{Number of folds. Defaults to 10.}
@@ -25,7 +25,7 @@ prediction error. The returned function can be passed directly to
 The data and formula are extracted from the fitted model via
 \code{model.frame()} and \code{formula()}, so no separate data argument is
 required. This works correctly when every variable referenced inside
-\code{I()} expressions also appears as a direct term in the formula — which
+\code{I()} expressions also appears as a direct term in the formula -- which
 is the normal case when \code{modelminer} builds formulas incrementally.
 
 \strong{Performance note:} each call to the returned function refits the

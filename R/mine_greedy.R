@@ -8,7 +8,7 @@
 # This is a local search: the first term added influences which terms look
 # useful later, so the path through candidate space depends on the order
 # metric improvements happen. It will not always find the globally best
-# subset — that is what the (unimplemented) exhaustive method is for.
+# subset -- that is what the (unimplemented) exhaustive method is for.
 #
 # Terms that cause model-fitting or metric errors are skipped with a warning
 # so that one bad candidate (e.g., a singular column combination) does not
@@ -20,12 +20,16 @@
   while (keep_going) {
     if (length(candidate_terms) == 0) break
 
+    # Only offer I(var^k) when var is already in the formula (marginality).
+    round_candidates <- .eligible_candidates(candidate_terms, current_formula)
+    if (length(round_candidates) == 0) break
+
     # Parallel vectors rather than a data frame because metric_comparison is
     # called with do.call(), which needs the metrics as a plain list.
     round_formulas <- character(0)
     round_metrics  <- list()
 
-    for (term in candidate_terms) {
+    for (term in round_candidates) {
       next_formula <- as.formula(paste(deparse1(current_formula), "+", term))
 
       next_model <- tryCatch(
@@ -48,7 +52,7 @@
       )
       if (is.null(next_metric)) next
 
-      cat("Formula:", deparse1(next_formula), "Metric:", next_metric, "\n")
+      message("Formula: ", deparse1(next_formula), " Metric: ", next_metric)
 
       results        <- rbind(results,
                               data.frame(Formula = deparse1(next_formula),

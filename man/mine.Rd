@@ -39,22 +39,23 @@ Defaults to \code{FALSE}.}
 
 \item{method}{Search algorithm to use. One of:
 \itemize{
-  \item \code{"greedy"} (default) — forward selection, interaction candidates use \code{:}
-  \item \code{"greedy_star"} — same but interaction candidates use \code{*}, so main effects are always included with their interaction
-  \item \code{"greedy_alt"} — phased: first-order → polynomial (selected vars) → interactions (selected terms)
-  \item \code{"greedy_alt_full"} — same phases, but phase 3 considers interactions among all predictors
-  \item \code{"greedy_alt_fb"} — \code{greedy_alt} with forward-backward within each phase
-  \item \code{"greedy_alt_full_fb"} — \code{greedy_alt_full} with forward-backward within each phase
-  \item \code{"forward_backward"} — forward-backward over a single pre-built pool
-  \item \code{"exhaustive"} — best-subset selection up to \code{max_terms} terms
+  \item \code{"greedy"} (default) -- forward selection, interaction candidates use \code{:}
+  \item \code{"greedy_star"} -- same but interaction candidates use \code{*}, so main effects are always included with their interaction
+  \item \code{"greedy_alt"} -- phased: first-order, polynomial (selected vars), interactions (selected terms)
+  \item \code{"greedy_alt_full"} -- same phases, but phase 3 considers interactions among all predictors
+  \item \code{"greedy_alt_fb"} -- \code{greedy_alt} with forward-backward within each phase
+  \item \code{"greedy_alt_full_fb"} -- \code{greedy_alt_full} with forward-backward within each phase
+  \item \code{"forward_backward"} -- forward-backward over a single pre-built pool
+  \item \code{"backward"} -- pure backward elimination from all predictors
+  \item \code{"exhaustive"} -- best-subset selection up to \code{max_terms} terms
 }
-May also be a custom search function — see Details.}
+May also be a custom search function -- see Details.}
 
 \item{max_terms}{Maximum number of terms to include in a subset for the
 exhaustive method. Defaults to 5 if \code{NULL}. Ignored by other methods.}
 }
 \value{
-A list with four elements:
+A list with five elements:
   \describe{
     \item{\code{Formula}}{The best formula found, as a \code{formula} object.}
     \item{\code{all_models}}{A data frame of every formula evaluated and its
@@ -64,7 +65,10 @@ A list with four elements:
     \item{\code{best_metric}}{The metric value for the best formula as a
       plain numeric scalar.}
     \item{\code{method}}{The search algorithm used (\code{"greedy"},
-      \code{"forward_backward"}, \code{"exhaustive"}, or \code{"custom"}).}
+      \code{"greedy_star"}, \code{"greedy_alt"}, \code{"greedy_alt_full"},
+      \code{"greedy_alt_fb"}, \code{"greedy_alt_full_fb"},
+      \code{"forward_backward"}, \code{"backward"}, \code{"exhaustive"},
+      or \code{"custom"}).}
   }
 }
 \description{

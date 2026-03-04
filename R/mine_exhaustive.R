@@ -46,7 +46,7 @@
 
   for (k in seq_len(max_terms)) {
     n_subsets <- choose(length(candidate_terms), k)
-    cat("Size ", k, ": evaluating ", n_subsets, " subsets...\n", sep = "")
+    message("Size ", k, ": evaluating ", n_subsets, " subsets...")
 
     subsets <- combn(candidate_terms, k, simplify = FALSE)
 
@@ -87,7 +87,7 @@
     }
   }
 
-  cat("Exhaustive search complete: evaluated ", nrow(results), " models.\n", sep = "")
+  message("Exhaustive search complete: evaluated ", nrow(results), " models.")
 
   list(Formula = best_formula, all_models = results)
 }

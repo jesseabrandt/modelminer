@@ -33,7 +33,7 @@ A well-fitting model has Cp approximately equal to p.
 \strong{Only valid for \code{lm} models.} Both the full model and every
 candidate model evaluated by \code{mine()} must be ordinary least-squares
 fits. The full model should include all predictors that could plausibly
-matter — typically \code{lm(y ~ ., data)}.
+matter -- typically \code{lm(y ~ ., data)}.
 }
 \examples{
 cp <- make_cp_metric(lm(mpg ~ ., data = mtcars))
