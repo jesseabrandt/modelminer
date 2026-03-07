@@ -42,7 +42,7 @@ terms to keep.  After lasso selects terms, `mine()` refits with the user's
 
 ## Basic usage
 
-```{r basic, results = "hide"}
+```{r basic, results = "hide", message = FALSE}
 result <- mine(mtcars, mpg, method = "lasso",
                max_degree = 2, max_interact_vars = 2)
 ```
@@ -71,7 +71,7 @@ producing a sparser, more conservative model.
 Both models always appear in `all_models`.  The `lambda_rule` argument
 controls which one becomes the returned `Formula`:
 
-```{r lambda-rules, results = "hide"}
+```{r lambda-rules, results = "hide", message = FALSE}
 res_min <- mine(mtcars, mpg, method = "lasso", lambda_rule = "lambda.min",
                 max_degree = 2, max_interact_vars = 1)
 res_1se <- mine(mtcars, mpg, method = "lasso", lambda_rule = "lambda.1se",
@@ -101,7 +101,7 @@ This is useful for understanding **how variables enter** -- which ones are
 most important (enter first at high lambda) and which are marginal (enter
 last at low lambda).
 
-```{r path, results = "hide"}
+```{r path, results = "hide", message = FALSE}
 path_result <- mine(mtcars, mpg, method = "lasso_path",
                     max_degree = 2, max_interact_vars = 2)
 ```
@@ -124,7 +124,7 @@ not too sparse, not too dense.
 
 ## Comparing lasso with stepwise methods
 
-```{r compare, results = "hide"}
+```{r compare, results = "hide", message = FALSE}
 cmp <- compare_methods(
   mtcars, mpg,
   configs = list(
@@ -160,7 +160,7 @@ the regularization mix via `alpha`:
 | 0.5 | Elastic net | Compromise: some sparsity, handles correlated predictors better |
 | 0 | Ridge (L2) | No sparsity: keeps all variables, shrinks coefficients |
 
-```{r elastic-net, results = "hide"}
+```{r elastic-net, results = "hide", message = FALSE}
 # Elastic net (alpha = 0.5)
 enet_result <- mine(mtcars, mpg, method = "lasso", alpha = 0.5,
                     max_degree = 1, max_interact_vars = 1)
@@ -194,7 +194,7 @@ y <- 3 * x1 - 2 * x2 + x1 * x3 + rnorm(n, sd = 1)
 dat <- data.frame(y, x1, x2, x3, x4, x5, x6)
 ```
 
-```{r synthetic-run, results = "hide"}
+```{r synthetic-run, results = "hide", message = FALSE}
 syn_cmp <- compare_methods(
   dat, y,
   configs = list(
@@ -215,7 +215,7 @@ syn_cmp$summary[, c("Config", "BestMetric", "ModelsEvaluated", "Formula")]
 
 The `lasso_path` result shows how variables enter as regularization decreases:
 
-```{r synthetic-path, results = "hide"}
+```{r synthetic-path, results = "hide", message = FALSE}
 syn_path <- mine(dat, y, method = "lasso_path",
                  max_degree = 1, max_interact_vars = 2)
 ```

@@ -77,7 +77,7 @@ warnings from attempted interaction terms.
 `tree()` accepts an intercept-only starting model, so `mine()` can begin
 from `mpg ~ 1` and build up:
 
-```{r tree-run, results = "hide"}
+```{r tree-run, results = "hide", message = FALSE}
 tree_result <- mine(
   mtcars, mpg,
   model_func        = tree,
@@ -97,7 +97,7 @@ tree_result$best_metric
 `rpart()` cannot fit an intercept-only model, so `mine()` automatically
 falls back to the best single-predictor starting point:
 
-```{r rpart-run, results = "hide"}
+```{r rpart-run, results = "hide", message = FALSE}
 rpart_result <- mine(
   mtcars, mpg,
   model_func        = rpart,
@@ -117,7 +117,7 @@ rpart_result$best_metric
 `randomForest()` also needs the single-predictor fallback.  Because the
 forest is stochastic, we set a seed for reproducibility:
 
-```{r rf-run, results = "hide"}
+```{r rf-run, results = "hide", message = FALSE}
 set.seed(42)
 rf_result <- mine(
   mtcars, mpg,
@@ -138,7 +138,7 @@ rf_result$best_metric
 `svm()` also cannot fit an intercept-only model, so the single-predictor
 fallback kicks in.  SVM accepts both polynomial terms and interactions:
 
-```{r svm-run, results = "hide"}
+```{r svm-run, results = "hide", message = FALSE}
 svm_result <- mine(
   mtcars, mpg,
   model_func        = svm,
@@ -158,7 +158,7 @@ svm_result$best_metric
 Running the same search with `lm` (AIC) alongside the tree and SVM methods
 shows how different model families select different features from the same data:
 
-```{r lm-run, results = "hide"}
+```{r lm-run, results = "hide", message = FALSE}
 lm_result <- mine(
   mtcars, mpg,
   max_degree        = 2,
@@ -197,7 +197,7 @@ Backward elimination is a natural fit for tree-based models because it
 sidesteps the intercept-only fallback entirely — the search always begins
 with every predictor in the formula.
 
-```{r backward-lm, results = "hide"}
+```{r backward-lm, results = "hide", message = FALSE}
 bwd_lm <- mine(
   mtcars, mpg,
   method            = "backward",
@@ -206,7 +206,7 @@ bwd_lm <- mine(
 )
 ```
 
-```{r backward-tree, results = "hide"}
+```{r backward-tree, results = "hide", message = FALSE}
 bwd_tree <- mine(
   mtcars, mpg,
   model_func        = tree,
@@ -217,7 +217,7 @@ bwd_tree <- mine(
 )
 ```
 
-```{r backward-rpart, results = "hide"}
+```{r backward-rpart, results = "hide", message = FALSE}
 bwd_rpart <- mine(
   mtcars, mpg,
   model_func        = rpart,
@@ -228,7 +228,7 @@ bwd_rpart <- mine(
 )
 ```
 
-```{r backward-rf, results = "hide"}
+```{r backward-rf, results = "hide", message = FALSE}
 set.seed(42)
 bwd_rf <- mine(
   mtcars, mpg,
@@ -240,7 +240,7 @@ bwd_rf <- mine(
 )
 ```
 
-```{r backward-svm, results = "hide"}
+```{r backward-svm, results = "hide", message = FALSE}
 bwd_svm <- mine(
   mtcars, mpg,
   model_func        = svm,
@@ -256,7 +256,7 @@ bwd_svm <- mine(
 To compare fairly, we run forward selection with matching settings
 (`max_degree = 1`, `max_interact_vars = 0`):
 
-```{r fwd-for-comparison, results = "hide"}
+```{r fwd-for-comparison, results = "hide", message = FALSE}
 set.seed(42)
 fwd_lm <- mine(mtcars, mpg, max_degree = 1, max_interact_vars = 0)
 fwd_tree <- mine(mtcars, mpg, model_func = tree, metric = deviance,
@@ -314,7 +314,7 @@ the same metric.
 To keep the candidate pool identical across methods, this comparison uses
 first-order terms only (`max_degree = 1`, `max_interact_vars = 0`):
 
-```{r vs-full-run, results = "hide"}
+```{r vs-full-run, results = "hide", message = FALSE}
 set.seed(42)
 sel_lm <- mine(mtcars, mpg, max_degree = 1, max_interact_vars = 0)
 sel_tr <- mine(mtcars, mpg, model_func = tree,   metric = deviance,
@@ -379,7 +379,7 @@ dat <- data.frame(
 )
 ```
 
-```{r synthetic-run, results = "hide"}
+```{r synthetic-run, results = "hide", message = FALSE}
 set.seed(42)
 syn_lm <- mine(dat, y, max_degree = 1, max_interact_vars = 2)
 syn_tr <- mine(dat, y, model_func = tree, metric = deviance,
@@ -447,7 +447,7 @@ from all predictors.  On this dataset, `rpart` benefits — it starts with
 `x1` and `x2` in the formula rather than depending on the single-predictor
 fallback:
 
-```{r synthetic-backward, results = "hide"}
+```{r synthetic-backward, results = "hide", message = FALSE}
 set.seed(42)
 syn_bwd_lm <- mine(dat, y, method = "backward",
                    max_degree = 1, max_interact_vars = 0)

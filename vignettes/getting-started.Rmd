@@ -33,7 +33,7 @@ wrapped with `formula_wrap()`.
 
 The simplest case — finding predictors of fuel economy in `mtcars`:
 
-```{r lm-example, results = "hide"}
+```{r lm-example, results = "hide", message = FALSE}
 library(modelminer)
 
 lm_result <- mine(mtcars, mpg, max_degree = 2, max_interact_vars = 2)
@@ -65,7 +65,7 @@ the signature compatible with what `mine()` expects.
 Here we search for predictors of transmission type in `mtcars` (`am`: 0 =
 automatic, 1 = manual):
 
-```{r glm-example, results = "hide", warning = FALSE}
+```{r glm-example, results = "hide", message = FALSE, warning = FALSE}
 glm_result <- mine(
   mtcars, am,
   model_func        = \(formula, data) glm(formula, data, family = binomial),
@@ -99,7 +99,7 @@ glmnet via `formula_wrap()`.  These native methods let regularization
 handle selection in one shot, then refit with `lm` (or your `model_func`)
 for the final model:
 
-```{r lasso-example, eval = requireNamespace("glmnet", quietly = TRUE), results = "hide"}
+```{r lasso-example, eval = requireNamespace("glmnet", quietly = TRUE), results = "hide", message = FALSE}
 # Requires the glmnet package.
 # install.packages("glmnet")
 
@@ -180,7 +180,7 @@ When experimenting with search settings — different algorithms, polynomial
 degrees, or interaction depth — `compare_methods()` runs multiple
 configurations and collects results in one call:
 
-```{r compare-example, results = "hide"}
+```{r compare-example, results = "hide", message = FALSE}
 cmp <- compare_methods(
   mtcars, mpg,
   configs = list(

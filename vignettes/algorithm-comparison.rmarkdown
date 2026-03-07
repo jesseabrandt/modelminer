@@ -227,3 +227,4 @@ cmp5_cv10 <- compare_methods(mtcars, mpg, configs = configs, metric = cv10)
 ```{r cv-scenario5-cv10-results}
 cmp5_cv10$summary[, c("Config", "BestMetric", "ModelsEvaluated", "Formula")]
 ```
+
