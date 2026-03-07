@@ -270,6 +270,15 @@ make_cv_metric <- function(k = 10, seed = 1L) {
     y <- model.response(model.frame(model))
     n <- length(y)
 
+    # Save and restore RNG state so callers' randomness is not affected.
+    old_seed <- if (exists(".Random.seed", envir = globalenv(), inherits = FALSE))
+      get(".Random.seed", envir = globalenv()) else NULL
+    on.exit({
+      if (is.null(old_seed))
+        rm(".Random.seed", envir = globalenv())
+      else
+        assign(".Random.seed", old_seed, envir = globalenv())
+    }, add = TRUE)
     set.seed(seed)
     folds <- sample(rep_len(seq_len(k), n))
 

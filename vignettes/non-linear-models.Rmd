@@ -8,12 +8,18 @@ vignette: >
 ---
 
 ```{r setup, include = FALSE}
-knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+has_all_pkgs <- all(vapply(
+  c("tree", "rpart", "randomForest", "e1071"),
+  requireNamespace, logical(1), quietly = TRUE
+))
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = has_all_pkgs)
 library(modelminer)
-library(tree)
-library(rpart)
-library(randomForest)
-library(e1071)
+if (has_all_pkgs) {
+  library(tree)
+  library(rpart)
+  library(randomForest)
+  library(e1071)
+}
 ```
 
 ## Does stepwise selection make sense for non-linear models?

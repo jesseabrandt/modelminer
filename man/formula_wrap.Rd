@@ -17,7 +17,7 @@ Defaults to \code{"x"}.}
 Defaults to \code{"y"}.}
 }
 \value{
-A new function with the signature \code{function(data, formula, ...)}
+A new function with the signature \code{function(formula, data, ...)}
   that extracts \code{x} and \code{y} from \code{data} using the formula and
   calls the original \code{model_func}.
 }

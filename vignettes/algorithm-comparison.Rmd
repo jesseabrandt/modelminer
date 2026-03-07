@@ -24,6 +24,9 @@ library(modelminer)
 | `greedy_alt_fb` | `greedy_alt` with forward-backward within each phase |
 | `greedy_alt_full_fb` | `greedy_alt_full` with forward-backward within each phase |
 | `forward_backward` | Forward-backward over a single pool |
+| `backward` | Pure backward elimination from all predictors |
+| `lasso` | L1 regularization via `cv.glmnet()`; returns models at `lambda.min` and `lambda.1se` |
+| `lasso_path` | Full regularization path; records a model at each variable entry/exit point |
 
 ```{r configs}
 configs <- list(
@@ -33,7 +36,10 @@ configs <- list(
   greedy_alt_full    = list(method = "greedy_alt_full"),
   greedy_alt_fb      = list(method = "greedy_alt_fb"),
   greedy_alt_full_fb = list(method = "greedy_alt_full_fb"),
-  forward_backward   = list(method = "forward_backward")
+  forward_backward   = list(method = "forward_backward"),
+  backward           = list(method = "backward"),
+  lasso              = list(method = "lasso"),
+  lasso_path         = list(method = "lasso_path")
 )
 ```
 

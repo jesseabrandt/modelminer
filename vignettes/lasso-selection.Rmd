@@ -1,0 +1,249 @@
+---
+title: "Lasso and Regularization Path Selection"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Lasso and Regularization Path Selection}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = requireNamespace("glmnet", quietly = TRUE)
+)
+library(modelminer)
+```
+
+## Why lasso as a search method?
+
+The stepwise methods in modelminer (greedy, forward-backward, etc.) add or
+remove one term at a time, evaluating the metric at each step.  Lasso takes
+a fundamentally different approach: it considers **all** candidate terms at
+once and uses L1 regularization to shrink unimportant coefficients to zero.
+
+modelminer provides two lasso-based methods:
+
+| Method | What it does | Models returned |
+|--------|-------------|-----------------|
+| `"lasso"` | Runs `cv.glmnet()`, picks terms at `lambda.min` and `lambda.1se` | 2 (plus starting model) |
+| `"lasso_path"` | Walks the full `glmnet()` regularization path, records every distinct variable set | One per variable entry/exit point |
+
+Both methods build the full candidate pool (polynomials, interactions) from
+`max_degree` and `max_interact_vars`, then let regularization decide which
+terms to keep.  After lasso selects terms, `mine()` refits with the user's
+`model_func` (default `lm`) and evaluates with the user's `metric` (default
+`AIC`), so results are directly comparable with stepwise methods.
+
+**Note:** `keep_all_vars` is ignored for both lasso methods.
+
+---
+
+## Basic usage
+
+```{r basic, results = "hide"}
+result <- mine(mtcars, mpg, method = "lasso",
+               max_degree = 2, max_interact_vars = 2)
+```
+
+```{r basic-result}
+result$Formula
+result$best_metric
+```
+
+The `all_models` table shows both the `lambda.min` and `lambda.1se`
+selections:
+
+```{r basic-all-models}
+result$all_models
+```
+
+---
+
+## Choosing lambda: `lambda.min` vs `lambda.1se`
+
+By default, `method = "lasso"` returns the formula selected at `lambda.min`
+(the lambda that minimizes cross-validated error).  The `lambda.1se` rule
+picks the largest lambda within one standard error of the minimum --
+producing a sparser, more conservative model.
+
+Both models always appear in `all_models`.  The `lambda_rule` argument
+controls which one becomes the returned `Formula`:
+
+```{r lambda-rules, results = "hide"}
+res_min <- mine(mtcars, mpg, method = "lasso", lambda_rule = "lambda.min",
+                max_degree = 2, max_interact_vars = 1)
+res_1se <- mine(mtcars, mpg, method = "lasso", lambda_rule = "lambda.1se",
+                max_degree = 2, max_interact_vars = 1)
+```
+
+```{r lambda-rules-compare}
+data.frame(
+  rule    = c("lambda.min", "lambda.1se"),
+  formula = c(deparse1(res_min$Formula), deparse1(res_1se$Formula)),
+  AIC     = c(res_min$best_metric, res_1se$best_metric),
+  n_terms = c(length(attr(terms(res_min$Formula), "term.labels")),
+              length(attr(terms(res_1se$Formula), "term.labels")))
+)
+```
+
+---
+
+## The regularization path: `lasso_path`
+
+`method = "lasso_path"` gives a richer picture.  Instead of returning just
+two models, it walks the entire regularization path from most regularized
+(empty model) to least regularized (all variables included) and records a
+model at each point where the set of selected variables changes.
+
+This is useful for understanding **how variables enter** -- which ones are
+most important (enter first at high lambda) and which are marginal (enter
+last at low lambda).
+
+```{r path, results = "hide"}
+path_result <- mine(mtcars, mpg, method = "lasso_path",
+                    max_degree = 2, max_interact_vars = 2)
+```
+
+```{r path-result}
+path_result$all_models
+```
+
+```{r path-best}
+path_result$Formula
+path_result$best_metric
+```
+
+The `all_models` table reads like a story: the first row is the
+intercept-only model, then each subsequent row adds (or occasionally drops)
+a variable.  The best formula by AIC is typically somewhere in the middle --
+not too sparse, not too dense.
+
+---
+
+## Comparing lasso with stepwise methods
+
+```{r compare, results = "hide"}
+cmp <- compare_methods(
+  mtcars, mpg,
+  configs = list(
+    greedy           = list(method = "greedy"),
+    forward_backward = list(method = "forward_backward"),
+    backward         = list(method = "backward"),
+    lasso            = list(method = "lasso"),
+    lasso_path       = list(method = "lasso_path")
+  ),
+  max_degree = 2, max_interact_vars = 2
+)
+```
+
+```{r compare-result}
+cmp$summary[, c("Config", "BestMetric", "ModelsEvaluated", "Formula")]
+```
+
+Lasso methods often find similar formulas to stepwise but evaluate far
+fewer models -- regularization does the work in one shot rather than
+iterating term-by-term.
+
+---
+
+## Elastic net and ridge regression
+
+The `...` arguments in `mine()` are forwarded to `cv.glmnet()` (for
+`"lasso"`) or `glmnet()` (for `"lasso_path"`).  This lets you control
+the regularization mix via `alpha`:
+
+| `alpha` | Regularization | Effect |
+|---------|---------------|--------|
+| 1 (default) | Pure lasso (L1) | Sparse: drives coefficients to exactly zero |
+| 0.5 | Elastic net | Compromise: some sparsity, handles correlated predictors better |
+| 0 | Ridge (L2) | No sparsity: keeps all variables, shrinks coefficients |
+
+```{r elastic-net, results = "hide"}
+# Elastic net (alpha = 0.5)
+enet_result <- mine(mtcars, mpg, method = "lasso", alpha = 0.5,
+                    max_degree = 1, max_interact_vars = 1)
+```
+
+```{r elastic-net-result}
+enet_result$Formula
+```
+
+Ridge regression (`alpha = 0`) never zeros out coefficients, so it selects
+all variables.  This is useful as a baseline but not for variable selection.
+
+Other `cv.glmnet` / `glmnet` arguments work too:
+
+- `nfolds` -- number of CV folds (default 10)
+- `family` -- response distribution (e.g., `"binomial"` for classification)
+
+---
+
+## Synthetic example: signal recovery
+
+To see how lasso compares with stepwise on a problem with known structure:
+
+```{r synthetic-data}
+set.seed(42)
+n <- 500
+x1 <- rnorm(n); x2 <- rnorm(n); x3 <- rnorm(n)
+x4 <- rnorm(n); x5 <- rnorm(n); x6 <- rnorm(n)
+# True model: y = 3*x1 - 2*x2 + x1*x3 + noise
+y <- 3 * x1 - 2 * x2 + x1 * x3 + rnorm(n, sd = 1)
+dat <- data.frame(y, x1, x2, x3, x4, x5, x6)
+```
+
+```{r synthetic-run, results = "hide"}
+syn_cmp <- compare_methods(
+  dat, y,
+  configs = list(
+    greedy     = list(method = "greedy"),
+    fwd_bwd    = list(method = "forward_backward"),
+    lasso      = list(method = "lasso"),
+    lasso_path = list(method = "lasso_path")
+  ),
+  max_degree = 1, max_interact_vars = 2
+)
+```
+
+```{r synthetic-result}
+syn_cmp$summary[, c("Config", "BestMetric", "ModelsEvaluated", "Formula")]
+```
+
+### Inspecting the lasso path
+
+The `lasso_path` result shows how variables enter as regularization decreases:
+
+```{r synthetic-path, results = "hide"}
+syn_path <- mine(dat, y, method = "lasso_path",
+                 max_degree = 1, max_interact_vars = 2)
+```
+
+```{r synthetic-path-result}
+syn_path$all_models
+```
+
+The order of variable entry often reveals the relative importance of
+predictors: the strongest signals enter first (at high lambda), while
+noise variables enter last (if at all).
+
+---
+
+## When to use each method
+
+- **`"lasso"`** -- quick, principled variable selection. Good default when
+  you want a single "best" model without iterating. Use `lambda_rule =
+  "lambda.1se"` if you prefer parsimony.
+- **`"lasso_path"`** -- when you want to see the full landscape of models
+  from sparsest to densest, understand variable importance by entry order,
+  or compare many nested models at once.
+- **Stepwise methods** -- when you need fine-grained control over the search
+  (e.g., forward-backward can correct early mistakes), or when using model
+  functions that don't produce a numeric design matrix.
+
+The lasso methods require the `glmnet` package:
+
+```{r install, eval = FALSE}
+install.packages("glmnet")
+```

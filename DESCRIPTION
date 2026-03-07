@@ -12,9 +12,12 @@ Authors@R: c(
 Description: Automated model selection that searches over polynomial terms and
     interaction terms to find the formula that best optimizes a user-supplied
     metric (default: AIC). Supports greedy forward selection, forward-backward
-    stepwise search, backward elimination, and phased greedy variants. Works
-    with any model function that accepts a formula and data argument, including
-    lm, glm, and matrix-based models adapted via formula_wrap().
+    stepwise search, backward elimination, phased greedy variants, and
+    L1-regularised selection via lasso and lasso-path methods (requires
+    'glmnet'). Works with any model function that accepts a formula and data
+    argument, including lm, glm, and matrix-based models adapted via
+    formula_wrap().
+Depends: R (>= 4.0.0)
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
@@ -28,6 +31,9 @@ Suggests:
     rpart,
     tree,
     randomForest,
-    e1071
+    e1071,
+    glmnet,
+    ranger,
+    gbm
 VignetteBuilder: knitr
 Config/testthat/edition: 3

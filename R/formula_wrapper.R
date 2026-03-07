@@ -11,7 +11,7 @@
 #' @param y_name Name of the response vector argument in \code{model_func}.
 #'   Defaults to \code{"y"}.
 #'
-#' @returns A new function with the signature \code{function(data, formula, ...)}
+#' @returns A new function with the signature \code{function(formula, data, ...)}
 #'   that extracts \code{x} and \code{y} from \code{data} using the formula and
 #'   calls the original \code{model_func}.
 #'
@@ -34,7 +34,10 @@ formula_wrap <- function(model_func, x_name = "x", y_name = "y") {
   # correct argument names automatically, though this is unreliable for
   # functions that use ... or have non-standard signatures.
 
-  new_func <- function(data, formula, ...) {
+  new_func <- function(formula, data, ...) {
+    if (!inherits(formula, "formula"))
+      stop("'formula' must be a formula object (did you swap formula and data?)",
+           call. = FALSE)
     xy   <- to_xy(data, formula)
     args <- list(...)
     args[[x_name]] <- xy$x

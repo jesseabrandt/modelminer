@@ -91,12 +91,51 @@ Because `glm` returns an object that `AIC()` understands, no change to the
 
 ---
 
-## Example 3: Matrix-based models with `formula_wrap()`
+## Example 3: Lasso selection
+
+For lasso/elastic-net variable selection, use `method = "lasso"` or
+`method = "lasso_path"` instead of running stepwise search on top of
+glmnet via `formula_wrap()`.  These native methods let regularization
+handle selection in one shot, then refit with `lm` (or your `model_func`)
+for the final model:
+
+```{r lasso-example, eval = requireNamespace("glmnet", quietly = TRUE), results = "hide"}
+# Requires the glmnet package.
+# install.packages("glmnet")
+
+lasso_result <- mine(
+  mtcars, mpg,
+  method            = "lasso",
+  max_degree        = 2,
+  max_interact_vars = 2
+)
+```
+
+```{r lasso-result, eval = requireNamespace("glmnet", quietly = TRUE)}
+lasso_result$Formula
+lasso_result$best_metric
+```
+
+`method = "lasso_path"` walks the full regularization path and records
+every model where the variable set changes, giving a richer view of the
+selection landscape.  See `vignette("lasso-selection")` for details.
+
+Extra arguments are forwarded to `cv.glmnet()` / `glmnet()`, so you can
+set `alpha` (0 = ridge, 0.5 = elastic net, 1 = lasso), `nfolds`, `family`,
+etc.
+
+## Example 4: Matrix-based models with `formula_wrap()`
 
 Some model functions don't accept a formula — `glmnet::cv.glmnet` takes a
 predictor matrix `x` and response vector `y` instead. `formula_wrap()` adapts
 such functions to `mine()`'s interface by extracting `x` and `y` from a data
 frame using the formula.
+
+> **Note:** For lasso variable selection, prefer `method = "lasso"` (Example
+> 3) over wrapping `cv.glmnet` with `formula_wrap()`.  The wrapper runs
+> stepwise search *on top of* lasso's own selection, which is redundant.
+> `formula_wrap()` is still useful for other matrix-based models that don't
+> have a native search method.
 
 The anonymous function pattern from Example 2 applies here too: use it to
 fix arguments the wrapper can't infer, such as the `family`.
