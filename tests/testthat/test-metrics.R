@@ -131,11 +131,13 @@ test_that("randomForest errors when neither err.rate nor mse present", {
 # extract_metric.rpart --------------------------------------------------------
 
 test_that("rpart returns min xerror from cptable", {
+  skip_if_not_installed("rpart")
   m <- rpart::rpart(mpg ~ ., data = mtcars)
   expect_equal(extract_metric(m), min(m$cptable[, "xerror"]))
 })
 
 test_that("rpart result is a single numeric", {
+  skip_if_not_installed("rpart")
   m <- rpart::rpart(mpg ~ ., data = mtcars)
   result <- extract_metric(m)
   expect_length(result, 1)
@@ -143,6 +145,7 @@ test_that("rpart result is a single numeric", {
 })
 
 test_that("rpart works for classification trees", {
+  skip_if_not_installed("rpart")
   m <- rpart::rpart(Species ~ ., data = iris)
   expect_equal(extract_metric(m), min(m$cptable[, "xerror"]))
 })
@@ -202,6 +205,7 @@ test_that("list_metrics works without error on lm", {
 })
 
 test_that("list_metrics works without error on rpart", {
+  skip_if_not_installed("rpart")
   m <- rpart::rpart(mpg ~ ., data = mtcars)
   expect_no_error(list_metrics(m))
 })

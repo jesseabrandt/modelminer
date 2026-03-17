@@ -1,5 +1,11 @@
 #' Automated model selection with feature engineering
 #'
+#' Starting from an intercept-only (or all-first-order) model, iteratively adds
+#' and optionally removes terms -- polynomial expansions, interactions, and
+#' first-order predictors -- that most improve a user-supplied metric. Multiple
+#' search strategies are available, from greedy forward selection to
+#' L1-regularised lasso.
+#'
 #' @param data A data frame containing the response and predictor variables.
 #' @param response_var The name of the response variable (unquoted).
 #' @param model_func A model function accepting \code{formula} and \code{data} arguments.
@@ -22,20 +28,49 @@
 #'     \item \code{"forward_backward"} -- forward-backward over a single pre-built pool
 #'     \item \code{"backward"} -- pure backward elimination from all predictors
 #'     \item \code{"exhaustive"} -- best-subset selection up to \code{max_terms} terms
+#'     \item \code{"lasso"} -- L1-regularised selection via \code{glmnet::cv.glmnet()}
+#'       over the full candidate pool. Requires the \pkg{glmnet} package.
+#'       \code{keep_all_vars} affects the starting formula but lasso considers
+#'       the full candidate pool regardless.
+#'       Extra arguments in \code{...} are passed to \code{cv.glmnet()}, e.g.
+#'       \code{alpha} (0 = ridge, 0.5 = elastic net, 1 = lasso), \code{nfolds},
+#'       \code{family}.
+#'     \item \code{"lasso_path"} -- walks the full \code{glmnet()} regularization
+#'       path and records every model at which the selected variable set changes
+#'       (each variable entry/exit point). Produces a richer \code{all_models}
+#'       table than \code{"lasso"}. The best formula is whichever optimizes
+#'       the user's \code{metric}. Requires the \pkg{glmnet} package.
 #'   }
 #'   May also be a custom search function -- see Details.
 #' @param max_terms Maximum number of terms to include in a subset for the
 #'   exhaustive method. Defaults to 5 if \code{NULL}. Ignored by other methods.
+#' @param lambda_rule For \code{method = "lasso"}: which lambda to use for the
+#'   selected formula. One of \code{"lambda.min"} (default, best CV performance)
+#'   or \code{"lambda.1se"} (sparser, within 1 SE of the minimum). Both models
+#'   appear in \code{all_models} regardless of this choice. Ignored by other
+#'   methods.
+#' @param verbose If \code{TRUE} (the default), print progress messages showing
+#'   each model evaluated during the search. Set to \code{FALSE} to suppress
+#'   all iteration output.
+#' @param ... Additional arguments forwarded to \code{\link[glmnet]{cv.glmnet}}
+#'   (for \code{method = "lasso"}) or \code{\link[glmnet]{glmnet}} (for
+#'   \code{method = "lasso_path"}). Common options include \code{alpha},
+#'   \code{nfolds}, and \code{family}. Ignored for all other built-in methods.
 #'
 #' @details
-#' When \code{method} is a function it must have the signature:
+#' When \code{method} is a function it must accept at least these positional
+#' arguments:
 #' \preformatted{
 #'   function(candidate_terms, current_formula, current_metric,
-#'            results, model_func, metric, metric_comparison, data)
+#'            results, model_func, metric, metric_comparison, data, ...)
 #' }
-#' and return \code{list(Formula, all_models)} matching the standard contract.
-#' This lets you pass experimental ("draft") search implementations for comparison
-#' via \code{\link{compare_methods}}.
+#' Built-in methods may also receive \code{response_str} and other named
+#' arguments via \code{...}.  A custom function can accept and ignore these
+#' with a \code{...} catch-all.
+#'
+#' The function must return \code{list(Formula, all_models)} matching the
+#' standard contract.  This lets you pass experimental ("draft") search
+#' implementations for comparison via \code{\link{compare_methods}}.
 #'
 #' @returns A list with five elements:
 #'   \describe{
@@ -50,7 +85,7 @@
 #'       \code{"greedy_star"}, \code{"greedy_alt"}, \code{"greedy_alt_full"},
 #'       \code{"greedy_alt_fb"}, \code{"greedy_alt_full_fb"},
 #'       \code{"forward_backward"}, \code{"backward"}, \code{"exhaustive"},
-#'       or \code{"custom"}).}
+#'       \code{"lasso"}, \code{"lasso_path"}, or \code{"custom"}).}
 #'   }
 #' @export
 #'
@@ -58,12 +93,13 @@
 #' result <- mine(mtcars, mpg)
 #' result$Formula
 #' @importFrom rlang enexpr as_string
-#' @importFrom stats AIC as.formula lm hatvalues model.frame model.response residuals
+#' @importFrom stats AIC as.formula lm hatvalues model.frame model.matrix model.response residuals
 #' @importFrom utils combn
 mine <- function(data, response_var, model_func = lm,
                  max_degree = 3, max_interact_vars = 2, metric = AIC,
                  metric_comparison = min, keep_all_vars = FALSE,
-                 method = "greedy", max_terms = NULL) {
+                 method = "greedy", max_terms = NULL,
+                 lambda_rule = "lambda.min", verbose = TRUE, ...) {
   response_str <- as_string(enexpr(response_var))
   .mine_impl(data, response_str,
              model_func        = model_func,
@@ -73,7 +109,10 @@ mine <- function(data, response_var, model_func = lm,
              metric_comparison = metric_comparison,
              keep_all_vars     = keep_all_vars,
              method            = method,
-             max_terms         = max_terms)
+             max_terms         = max_terms,
+             lambda_rule       = lambda_rule,
+             verbose           = verbose,
+             ...)
 }
 
 # Internal workhorse. Accepts response_var as a plain string rather than an
@@ -82,14 +121,15 @@ mine <- function(data, response_var, model_func = lm,
 .mine_impl <- function(data, response_str, model_func = lm,
                        max_degree = 3, max_interact_vars = 2, metric = AIC,
                        metric_comparison = min, keep_all_vars = FALSE,
-                       method = "greedy", max_terms = NULL) {
+                       method = "greedy", max_terms = NULL,
+                       lambda_rule = "lambda.min", verbose = TRUE, ...) {
 
   if (!is.function(method)) {
     method <- match.arg(method, c("greedy", "greedy_star",
                                    "greedy_alt", "greedy_alt_full",
                                    "greedy_alt_fb", "greedy_alt_full_fb",
                                    "forward_backward", "backward",
-                                   "exhaustive"))
+                                   "exhaustive", "lasso", "lasso_path"))
   }
 
   # ---- Shared setup: candidate term pool ----
@@ -180,14 +220,14 @@ mine <- function(data, response_var, model_func = lm,
                                Metric  = I(list()))
 
   if (intercept_ok) {
-    message("Formula: ", deparse1(start_formula), " Metric: ", start_metric)
+    if (verbose) message("Formula: ", deparse1(start_formula), " Metric: ", start_metric)
     start_results <- data.frame(
       Formula = deparse1(start_formula),
       Metric  = I(list(start_metric))
     )
   } else {
     # ---- Single-predictor fallback ----
-    message("Intercept-only model failed; trying each predictor individually...")
+    if (verbose) message("Intercept-only model failed; trying each predictor individually...")
     fallback_metrics  <- list()
     fallback_formulas <- list()
 
@@ -207,7 +247,7 @@ mine <- function(data, response_var, model_func = lm,
       })
       if (is.null(mv)) next
 
-      message("Formula: ", deparse1(f), " Metric: ", mv)
+      if (verbose) message("Formula: ", deparse1(f), " Metric: ", mv)
       fallback_formulas[[length(fallback_formulas) + 1L]] <- f
       fallback_metrics[[length(fallback_metrics) + 1L]]   <- mv
       start_results <- rbind(start_results,
@@ -227,7 +267,7 @@ mine <- function(data, response_var, model_func = lm,
     start_metric  <- fallback_metrics[[best_idx]]
     initial_terms <- all.vars(start_formula[[3]])
 
-    message("Selected fallback starting model: ", deparse1(start_formula),
+    if (verbose) message("Selected fallback starting model: ", deparse1(start_formula),
             " (metric: ", start_metric, ")")
   }
 
@@ -255,11 +295,14 @@ mine <- function(data, response_var, model_func = lm,
     model_func        = model_func,
     metric            = metric,
     metric_comparison = metric_comparison,
-    data              = data
+    data              = data,
+    verbose           = verbose
   )
 
   result <- if (is.function(method)) {
-    do.call(method, common_args)
+    # Custom methods may not accept 'verbose'; strip it to avoid errors.
+    custom_args <- common_args[names(common_args) != "verbose"]
+    do.call(method, custom_args)
   } else if (method == "greedy") {
     do.call(.mine_greedy, common_args)
   } else if (method == "greedy_star") {
@@ -286,6 +329,13 @@ mine <- function(data, response_var, model_func = lm,
     do.call(.mine_backward,
             c(common_args, list(response_str  = response_str,
                                 initial_terms = initial_terms)))
+  } else if (method == "lasso") {
+    do.call(.mine_lasso,
+            c(common_args, list(response_str = response_str,
+                                lambda_rule = lambda_rule, ...)))
+  } else if (method == "lasso_path") {
+    do.call(.mine_lasso_path,
+            c(common_args, list(response_str = response_str, ...)))
   } else {
     do.call(.mine_exhaustive,
             c(common_args, list(response_str = response_str,
@@ -326,10 +376,12 @@ mine <- function(data, response_var, model_func = lm,
   # collected by compare_methods() or inspected programmatically.
   result$method <- if (is.function(method)) "custom" else method
 
-  message("\n-- Best formula ------------------------------------------")
-  message("Formula: ", deparse1(result$Formula))
-  message("Metric:  ", result$best_metric)
-  message("----------------------------------------------------------\n")
+  if (verbose) {
+    message("\n-- Best formula ------------------------------------------")
+    message("Formula: ", deparse1(result$Formula))
+    message("Metric:  ", result$best_metric)
+    message("----------------------------------------------------------\n")
+  }
 
   result
 }

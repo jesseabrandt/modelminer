@@ -26,7 +26,6 @@
   }, candidate_terms)
 }
 
-#' @importFrom stats model.matrix
 # Extracts the response vector y and predictor matrix x from a data frame
 # using a formula. Used inside formula_wrap() to convert formula+data calls
 # into the x/y interface expected by functions like glmnet.
@@ -37,6 +36,12 @@ to_xy <- function(data, formula) {
   # model.matrix handles interactions, polynomials, and factor encoding.
   # The intercept column is dropped because model_func will add its own.
   x <- model.matrix(formula, data = data)[, -1, drop = FALSE]
+
+  if (ncol(x) == 0L) {
+    stop("formula_wrap: the formula '", deparse1(formula),
+         "' produces no predictor columns after dropping the intercept.",
+         call. = FALSE)
+  }
 
   return(list(y = y, x = x))
 }

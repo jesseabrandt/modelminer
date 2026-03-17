@@ -22,7 +22,7 @@
 # Returns list(Formula, all_models) matching the mine() contract.
 .mine_greedy_star <- function(candidate_terms, current_formula, current_metric,
                                results, model_func, metric, metric_comparison,
-                               data, predictor_vars, numeric_vars,
+                               data, verbose = TRUE, predictor_vars, numeric_vars,
                                max_degree, max_interact_vars) {
 
   # Rebuild the candidate pool using * for interactions.
@@ -47,16 +47,22 @@
     }
   }
 
+  # Track current terms explicitly for .build_formula() usage.
+  current_terms <- attr(stats::terms(current_formula), "term.labels")
+  response_str  <- as.character(current_formula[[2]])
+
   keep_going <- TRUE
   while (keep_going) {
     if (length(star_candidates) == 0) break
 
-    round_formulas <- character(0)
+    round_formulas <- list()
     round_metrics  <- list()
     round_terms    <- character(0)  # original candidate string for each trial
 
     for (term in star_candidates) {
-      next_formula <- as.formula(paste(deparse1(current_formula), "+", term))
+      # Use .build_formula with the * term appended; R's formula parser
+      # expands a*b into a + b + a:b automatically.
+      next_formula <- .build_formula(response_str, c(current_terms, term))
 
       next_model <- tryCatch(
         model_func(formula = next_formula, data = data),
@@ -78,12 +84,12 @@
       )
       if (is.null(next_metric)) next
 
-      message("Formula: ", deparse1(next_formula), " Metric: ", next_metric)
+      if (verbose) message("Formula: ", deparse1(next_formula), " Metric: ", next_metric)
 
       results        <- rbind(results,
                               data.frame(Formula = deparse1(next_formula),
                                          Metric  = I(list(next_metric))))
-      round_formulas <- c(round_formulas, deparse1(next_formula))
+      round_formulas <- c(round_formulas, list(next_formula))
       round_metrics  <- c(round_metrics, list(next_metric))
       round_terms    <- c(round_terms, term)
     }
@@ -99,7 +105,7 @@
     } else {
       current_metric  <- best_round_metric
       best_idx        <- which(sapply(round_metrics, identical, best_round_metric))[1]
-      current_formula <- as.formula(round_formulas[best_idx])
+      current_formula <- round_formulas[[best_idx]]
 
       # Prune by expanded term labels (covers first-order and : components of
       # any * term that was selected) AND by the original candidate string

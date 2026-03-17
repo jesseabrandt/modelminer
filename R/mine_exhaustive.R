@@ -12,7 +12,8 @@
 # Returns list(Formula, all_models) matching the mine() contract.
 .mine_exhaustive <- function(candidate_terms, current_formula, current_metric,
                              results, model_func, metric, metric_comparison,
-                             data, response_str, max_terms = NULL) {
+                             data, verbose = TRUE, response_str,
+                             max_terms = NULL) {
 
   if (is.null(max_terms)) max_terms <- 5L
   max_terms <- min(max_terms, length(candidate_terms))
@@ -46,7 +47,7 @@
 
   for (k in seq_len(max_terms)) {
     n_subsets <- choose(length(candidate_terms), k)
-    message("Size ", k, ": evaluating ", n_subsets, " subsets...")
+    if (verbose) message("Size ", k, ": evaluating ", n_subsets, " subsets...")
 
     subsets <- combn(candidate_terms, k, simplify = FALSE)
 
@@ -87,7 +88,7 @@
     }
   }
 
-  message("Exhaustive search complete: evaluated ", nrow(results), " models.")
+  if (verbose) message("Exhaustive search complete: evaluated ", nrow(results), " models.")
 
   list(Formula = best_formula, all_models = results)
 }

@@ -18,7 +18,8 @@
 # Returns list(Formula, all_models) matching the mine() contract.
 .mine_forward_backward <- function(candidate_terms, current_formula, current_metric,
                                    results, model_func, metric, metric_comparison,
-                                   data, response_str, initial_terms = character(0)) {
+                                   data, verbose = TRUE, response_str,
+                                   initial_terms = character(0)) {
 
   # Terms currently in the model, tracked in : notation. Starts populated
   # when keep_all_vars = TRUE so those terms are eligible for backward removal.
@@ -61,7 +62,7 @@
         )
         if (is.null(try_metric)) next
 
-        message("[fwd] Formula: ", deparse1(try_formula), " Metric: ", try_metric)
+        if (verbose) message("[fwd] Formula: ", deparse1(try_formula), " Metric: ", try_metric)
 
         results      <- rbind(results,
                               data.frame(Formula = deparse1(try_formula),
@@ -121,7 +122,7 @@
         )
         if (is.null(try_metric)) next
 
-        message("[bwd] Formula: ", deparse1(try_formula), " Metric: ", try_metric)
+        if (verbose) message("[bwd] Formula: ", deparse1(try_formula), " Metric: ", try_metric)
 
         results      <- rbind(results,
                               data.frame(Formula = deparse1(try_formula),

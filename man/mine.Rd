@@ -14,7 +14,10 @@ mine(
   metric_comparison = min,
   keep_all_vars = FALSE,
   method = "greedy",
-  max_terms = NULL
+  max_terms = NULL,
+  lambda_rule = "lambda.min",
+  verbose = TRUE,
+  ...
 )
 }
 \arguments{
@@ -48,11 +51,38 @@ Defaults to \code{FALSE}.}
   \item \code{"forward_backward"} -- forward-backward over a single pre-built pool
   \item \code{"backward"} -- pure backward elimination from all predictors
   \item \code{"exhaustive"} -- best-subset selection up to \code{max_terms} terms
+  \item \code{"lasso"} -- L1-regularised selection via \code{glmnet::cv.glmnet()}
+    over the full candidate pool. Requires the \pkg{glmnet} package.
+    \code{keep_all_vars} affects the starting formula but lasso considers
+    the full candidate pool regardless.
+    Extra arguments in \code{...} are passed to \code{cv.glmnet()}, e.g.
+    \code{alpha} (0 = ridge, 0.5 = elastic net, 1 = lasso), \code{nfolds},
+    \code{family}.
+  \item \code{"lasso_path"} -- walks the full \code{glmnet()} regularization
+    path and records every model at which the selected variable set changes
+    (each variable entry/exit point). Produces a richer \code{all_models}
+    table than \code{"lasso"}. The best formula is whichever optimizes
+    the user's \code{metric}. Requires the \pkg{glmnet} package.
 }
 May also be a custom search function -- see Details.}
 
 \item{max_terms}{Maximum number of terms to include in a subset for the
 exhaustive method. Defaults to 5 if \code{NULL}. Ignored by other methods.}
+
+\item{lambda_rule}{For \code{method = "lasso"}: which lambda to use for the
+selected formula. One of \code{"lambda.min"} (default, best CV performance)
+or \code{"lambda.1se"} (sparser, within 1 SE of the minimum). Both models
+appear in \code{all_models} regardless of this choice. Ignored by other
+methods.}
+
+\item{verbose}{If \code{TRUE} (the default), print progress messages showing
+each model evaluated during the search. Set to \code{FALSE} to suppress
+all iteration output.}
+
+\item{...}{Additional arguments forwarded to \code{\link[glmnet]{cv.glmnet}}
+(for \code{method = "lasso"}) or \code{\link[glmnet]{glmnet}} (for
+\code{method = "lasso_path"}). Common options include \code{alpha},
+\code{nfolds}, and \code{family}. Ignored for all other built-in methods.}
 }
 \value{
 A list with five elements:
@@ -68,21 +98,30 @@ A list with five elements:
       \code{"greedy_star"}, \code{"greedy_alt"}, \code{"greedy_alt_full"},
       \code{"greedy_alt_fb"}, \code{"greedy_alt_full_fb"},
       \code{"forward_backward"}, \code{"backward"}, \code{"exhaustive"},
-      or \code{"custom"}).}
+      \code{"lasso"}, \code{"lasso_path"}, or \code{"custom"}).}
   }
 }
 \description{
-Automated model selection with feature engineering
+Starting from an intercept-only (or all-first-order) model, iteratively adds
+and optionally removes terms -- polynomial expansions, interactions, and
+first-order predictors -- that most improve a user-supplied metric. Multiple
+search strategies are available, from greedy forward selection to
+L1-regularised lasso.
 }
 \details{
-When \code{method} is a function it must have the signature:
+When \code{method} is a function it must accept at least these positional
+arguments:
 \preformatted{
   function(candidate_terms, current_formula, current_metric,
-           results, model_func, metric, metric_comparison, data)
+           results, model_func, metric, metric_comparison, data, ...)
 }
-and return \code{list(Formula, all_models)} matching the standard contract.
-This lets you pass experimental ("draft") search implementations for comparison
-via \code{\link{compare_methods}}.
+Built-in methods may also receive \code{response_str} and other named
+arguments via \code{...}.  A custom function can accept and ignore these
+with a \code{...} catch-all.
+
+The function must return \code{list(Formula, all_models)} matching the
+standard contract.  This lets you pass experimental ("draft") search
+implementations for comparison via \code{\link{compare_methods}}.
 }
 \examples{
 result <- mine(mtcars, mpg)

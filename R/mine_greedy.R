@@ -14,7 +14,13 @@
 # so that one bad candidate (e.g., a singular column combination) does not
 # abort the entire search.
 .mine_greedy <- function(candidate_terms, current_formula, current_metric,
-                         results, model_func, metric, metric_comparison, data) {
+                         results, model_func, metric, metric_comparison, data,
+                         verbose = TRUE) {
+
+  # Track current terms explicitly so we can rebuild formulas via
+  # .build_formula() rather than string-pasting onto deparse1() output.
+  current_terms   <- attr(stats::terms(current_formula), "term.labels")
+  response_str    <- as.character(current_formula[[2]])
 
   keep_going <- TRUE
   while (keep_going) {
@@ -26,11 +32,12 @@
 
     # Parallel vectors rather than a data frame because metric_comparison is
     # called with do.call(), which needs the metrics as a plain list.
-    round_formulas <- character(0)
+    round_formulas <- list()
     round_metrics  <- list()
+    round_added    <- character(0)  # which candidate term each trial added
 
     for (term in round_candidates) {
-      next_formula <- as.formula(paste(deparse1(current_formula), "+", term))
+      next_formula <- .build_formula(response_str, c(current_terms, term))
 
       next_model <- tryCatch(
         model_func(formula = next_formula, data = data),
@@ -52,13 +59,14 @@
       )
       if (is.null(next_metric)) next
 
-      message("Formula: ", deparse1(next_formula), " Metric: ", next_metric)
+      if (verbose) message("Formula: ", deparse1(next_formula), " Metric: ", next_metric)
 
       results        <- rbind(results,
                               data.frame(Formula = deparse1(next_formula),
                                          Metric  = I(list(next_metric))))
-      round_formulas <- c(round_formulas, deparse1(next_formula))
+      round_formulas <- c(round_formulas, list(next_formula))
       round_metrics  <- c(round_metrics, list(next_metric))
+      round_added    <- c(round_added, term)
     }
 
     if (length(round_formulas) == 0) break  # every candidate failed to fit
@@ -77,13 +85,11 @@
       # If multiple terms tie on the metric, [1] picks the first one.
       # Ties are rare in practice; the choice is deterministic but arbitrary.
       best_idx        <- which(sapply(round_metrics, identical, best_round_metric))[1]
-      current_formula <- as.formula(round_formulas[best_idx])
+      current_formula <- round_formulas[[best_idx]]
+      current_terms   <- c(current_terms, round_added[best_idx])
 
       # Remove terms that are now in the formula from the candidate pool.
-      # attr(terms(), "term.labels") expands interactions (e.g. a:b stays a:b)
-      # so with : notation these match candidate strings directly.
-      used_terms      <- attr(stats::terms(current_formula), "term.labels")
-      candidate_terms <- setdiff(candidate_terms, used_terms)
+      candidate_terms <- setdiff(candidate_terms, current_terms)
     }
   }
 
