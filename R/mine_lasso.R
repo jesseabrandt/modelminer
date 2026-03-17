@@ -95,6 +95,15 @@
                  "data", "response_str", "lambda_rule")
   dots <- dots[!names(dots) %in% mine_args]
 
+  # Auto-detect family from response type when user hasn't specified it.
+  # glmnet defaults to "gaussian" which fails on factor responses.
+  if (is.null(dots[["family"]])) {
+    if (is.factor(y) || is.character(y)) {
+      n_levels <- length(unique(y))
+      dots[["family"]] <- if (n_levels == 2L) "binomial" else "multinomial"
+    }
+  }
+
   cv_fit <- tryCatch(
     do.call(glmnet::cv.glmnet, c(list(x = x, y = y), dots)),
     error = function(e) {
@@ -214,6 +223,14 @@
                  "results", "model_func", "metric", "metric_comparison",
                  "data", "response_str", "lambda_rule")
   dots <- dots[!names(dots) %in% mine_args]
+
+  # Auto-detect family from response type when user hasn't specified it.
+  if (is.null(dots[["family"]])) {
+    if (is.factor(y) || is.character(y)) {
+      n_levels <- length(unique(y))
+      dots[["family"]] <- if (n_levels == 2L) "binomial" else "multinomial"
+    }
+  }
 
   fit <- tryCatch(
     do.call(glmnet::glmnet, c(list(x = x, y = y), dots)),
