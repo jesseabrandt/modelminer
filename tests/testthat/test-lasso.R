@@ -277,3 +277,74 @@ test_that("lasso_path returns current formula gracefully when design matrix has 
   labels <- attr(terms(result$Formula), "term.labels")
   expect_true("x1" %in% labels)
 })
+
+# ---- multinomial support tests ----
+
+test_that("lasso works with multinomial family", {
+  skip_if_not_installed("nnet")
+  set.seed(60)
+  n <- 150
+  x1 <- rnorm(n); x2 <- rnorm(n); x3 <- rnorm(n)
+  # Three-class response driven by x1 and x2
+  probs <- cbind(exp(2 * x1), exp(2 * x2), rep(1, n))
+  probs <- probs / rowSums(probs)
+  y <- factor(apply(probs, 1, function(p) sample(c("A", "B", "C"), 1, prob = p)))
+  df <- data.frame(y = y, x1 = x1, x2 = x2, x3 = x3)
+
+  result <- mine(df, y, method = "lasso",
+                 model_func = nnet::multinom, metric = AIC,
+                 max_degree = 1, max_interact_vars = 1,
+                 family = "multinomial", trace = FALSE)
+
+  expect_type(result, "list")
+  expect_s3_class(result$Formula, "formula")
+  labels <- attr(terms(result$Formula), "term.labels")
+  # Should select at least one predictor (not intercept-only)
+  expect_true(length(labels) >= 1)
+})
+
+test_that("lasso_path works with multinomial family", {
+  skip_if_not_installed("nnet")
+  set.seed(61)
+  n <- 150
+  x1 <- rnorm(n); x2 <- rnorm(n); x3 <- rnorm(n)
+  probs <- cbind(exp(2 * x1), exp(2 * x2), rep(1, n))
+  probs <- probs / rowSums(probs)
+  y <- factor(apply(probs, 1, function(p) sample(c("A", "B", "C"), 1, prob = p)))
+  df <- data.frame(y = y, x1 = x1, x2 = x2, x3 = x3)
+
+  result <- mine(df, y, method = "lasso_path",
+                 model_func = nnet::multinom, metric = AIC,
+                 max_degree = 1, max_interact_vars = 1,
+                 family = "multinomial", trace = FALSE)
+
+  expect_type(result, "list")
+  expect_s3_class(result$Formula, "formula")
+  # lasso_path should produce multiple models
+  expect_gte(nrow(result$all_models), 2)
+})
+
+test_that(".extract_nonzero_cols handles multinomial coefficient list", {
+  # Direct unit test: multinomial coef() returns a list of matrices.
+  # .extract_nonzero_cols should union nonzero columns across all classes.
+  set.seed(62)
+  n <- 200
+  x1 <- rnorm(n); x2 <- rnorm(n); x3 <- rnorm(n)
+  probs <- cbind(exp(3 * x1), exp(3 * x2), rep(1, n))
+  probs <- probs / rowSums(probs)
+  y <- factor(apply(probs, 1, function(p) sample(c("A", "B", "C"), 1, prob = p)))
+
+  x <- cbind(x1, x2, x3)
+  fit <- glmnet::cv.glmnet(x, y, family = "multinomial")
+  coefs <- stats::coef(fit, s = "lambda.min")
+
+  # coefs should be a list (one per class)
+  expect_true(is.list(coefs))
+
+  # Our helper should handle this — extract nonzero columns across classes
+  nonzero <- modelminer:::.extract_nonzero_cols(coefs)
+  expect_type(nonzero, "character")
+  # With strong signal, should find x1 and x2
+  expect_true("x1" %in% nonzero)
+  expect_true("x2" %in% nonzero)
+})

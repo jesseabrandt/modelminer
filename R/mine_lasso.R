@@ -23,7 +23,7 @@
 # Returns list(Formula, all_models) matching the mine() contract.
 .mine_lasso <- function(candidate_terms, current_formula, current_metric,
                         results, model_func, metric, metric_comparison,
-                        data, response_str,
+                        data, verbose = TRUE, response_str,
                         lambda_rule = "lambda.min", ...) {
 
   if (!requireNamespace("glmnet", quietly = TRUE)) {
@@ -80,10 +80,12 @@
   old_seed <- if (exists(".Random.seed", envir = globalenv(), inherits = FALSE))
     get(".Random.seed", envir = globalenv()) else NULL
   on.exit({
-    if (is.null(old_seed))
-      rm(".Random.seed", envir = globalenv())
-    else
+    if (is.null(old_seed)) {
+      if (exists(".Random.seed", envir = globalenv(), inherits = FALSE))
+        rm(".Random.seed", envir = globalenv())
+    } else {
       assign(".Random.seed", old_seed, envir = globalenv())
+    }
   }, add = TRUE)
 
   dots <- list(...)
@@ -105,10 +107,8 @@
   formulas_out <- list()
   for (rule in c("lambda.min", "lambda.1se")) {
     lam <- cv_fit[[rule]]
-    coefs <- as.matrix(stats::coef(cv_fit, s = lam))
-    # Drop intercept row, keep non-zero coefficients
-    coefs <- coefs[-1, , drop = FALSE]
-    nonzero_cols <- rownames(coefs)[coefs[, 1] != 0]
+    coefs <- stats::coef(cv_fit, s = lam)
+    nonzero_cols <- .extract_nonzero_cols(coefs)
 
     # Map model.matrix column names back to formula terms.
     selected_terms <- .colnames_to_terms(nonzero_cols, all_terms, data)
@@ -131,7 +131,7 @@
     cv_idx <- which(cv_fit$lambda == lam)
     cv_mse <- if (length(cv_idx) == 1) cv_fit$cvm[cv_idx] else NA_real_
 
-    message("[lasso:", rule, "] Formula: ", deparse1(f),
+    if (verbose) message("[lasso:", rule, "] Formula: ", deparse1(f),
             " Metric: ", met, " (CV: ", round(cv_mse, 4), ")")
 
     results <- rbind(results,
@@ -162,7 +162,8 @@
 # Returns list(Formula, all_models) matching the mine() contract.
 .mine_lasso_path <- function(candidate_terms, current_formula, current_metric,
                              results, model_func, metric, metric_comparison,
-                             data, response_str, lambda_rule = NULL, ...) {
+                             data, verbose = TRUE, response_str,
+                             lambda_rule = NULL, ...) {
 
   if (!is.null(lambda_rule)) {
     warning("'lambda_rule' is ignored for method = 'lasso_path'. ",
@@ -196,10 +197,12 @@
   x <- stats::model.matrix(full_formula, data = mf)[, -1, drop = FALSE]
   y <- stats::model.response(mf)
 
-  # glmnet() (non-CV) accepts ncol >= 1, unlike cv.glmnet which needs >= 2.
-  # Return the starting formula unchanged only for an empty design matrix.
-  if (ncol(x) < 1L) {
-    warning("Lasso path requires at least 1 predictor column in the design matrix. ",
+  # glmnet() (non-CV) accepts ncol >= 1, but with a single column the path is
+
+  # trivial and the refit step may fail for model_func's that need >= 2 columns.
+  # Use the same >= 2 guard as cv.glmnet for consistency.
+  if (ncol(x) < 2L) {
+    warning("Lasso path requires at least 2 predictor columns in the design matrix. ",
             "Returning the starting formula unchanged.", call. = FALSE)
     return(list(Formula = current_formula, all_models = results))
   }
@@ -221,14 +224,25 @@
 
   # ---- Walk the lambda path, record each distinct variable set ----
 
-  beta <- as.matrix(fit$beta)  # p x nlambda
+  is_multinomial <- is.list(fit$beta)
+  if (!is_multinomial) {
+    beta <- as.matrix(fit$beta)  # p x nlambda
+  }
   best_formula    <- current_formula
   best_metric     <- current_metric
   prev_key        <- ""  # track previous variable set to skip duplicates
   n_before        <- nrow(results)
 
   for (i in seq_along(fit$lambda)) {
-    nonzero_cols <- rownames(beta)[beta[, i] != 0]
+    if (is_multinomial) {
+      # Union nonzero rows across all class-specific beta matrices at column i
+      nonzero_cols <- unique(unlist(lapply(fit$beta, function(b) {
+        bm <- as.matrix(b)
+        rownames(bm)[bm[, i] != 0]
+      })))
+    } else {
+      nonzero_cols <- rownames(beta)[beta[, i] != 0]
+    }
     selected_terms <- .colnames_to_terms(nonzero_cols, all_terms, data)
 
     # Deduplicate: skip if same variable set as previous lambda
@@ -251,7 +265,7 @@
     }
 
     n_terms <- length(selected_terms)
-    message("[lasso_path] lambda=", signif(fit$lambda[i], 4),
+    if (verbose) message("[lasso_path] lambda=", signif(fit$lambda[i], 4),
             " terms=", n_terms,
             " Formula: ", deparse1(f), " Metric: ", met)
 
@@ -277,9 +291,32 @@
     }
   }
 
-  message("Lasso path complete: ", nrow(results) - n_before, " distinct models evaluated.")
+  if (verbose) message("Lasso path complete: ", nrow(results) - n_before, " distinct models evaluated.")
 
   list(Formula = best_formula, all_models = results)
+}
+
+
+# Extract nonzero coefficient column names from glmnet coef() output.
+# For gaussian/binomial family, coef() returns a single sparse matrix.
+# For multinomial family, coef() returns a list of sparse matrices (one per
+# class).  This helper unions nonzero rows across all classes so that a
+# predictor selected for any class is included.
+.extract_nonzero_cols <- function(coefs) {
+  if (is.list(coefs) && !is.matrix(coefs)) {
+    # Multinomial: list of sparse matrices, one per class
+    all_nonzero <- unique(unlist(lapply(coefs, function(cm) {
+      cm <- as.matrix(cm)
+      # Drop intercept row
+      cm <- cm[-1, , drop = FALSE]
+      rownames(cm)[cm[, 1] != 0]
+    })))
+    return(all_nonzero)
+  }
+  # Single matrix (gaussian, binomial, etc.)
+  coefs <- as.matrix(coefs)
+  coefs <- coefs[-1, , drop = FALSE]
+  rownames(coefs)[coefs[, 1] != 0]
 }
 
 
