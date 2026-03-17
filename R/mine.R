@@ -1,5 +1,11 @@
 #' Automated model selection with feature engineering
 #'
+#' Starting from an intercept-only (or all-first-order) model, iteratively adds
+#' and optionally removes terms -- polynomial expansions, interactions, and
+#' first-order predictors -- that most improve a user-supplied metric. Multiple
+#' search strategies are available, from greedy forward selection to
+#' L1-regularised lasso.
+#'
 #' @param data A data frame containing the response and predictor variables.
 #' @param response_var The name of the response variable (unquoted).
 #' @param model_func A model function accepting \code{formula} and \code{data} arguments.
@@ -43,6 +49,9 @@
 #'   or \code{"lambda.1se"} (sparser, within 1 SE of the minimum). Both models
 #'   appear in \code{all_models} regardless of this choice. Ignored by other
 #'   methods.
+#' @param verbose If \code{TRUE} (the default), print progress messages showing
+#'   each model evaluated during the search. Set to \code{FALSE} to suppress
+#'   all iteration output.
 #' @param ... Additional arguments forwarded to \code{\link[glmnet]{cv.glmnet}}
 #'   (for \code{method = "lasso"}) or \code{\link[glmnet]{glmnet}} (for
 #'   \code{method = "lasso_path"}). Common options include \code{alpha},
@@ -84,13 +93,13 @@
 #' result <- mine(mtcars, mpg)
 #' result$Formula
 #' @importFrom rlang enexpr as_string
-#' @importFrom stats AIC as.formula lm hatvalues model.frame model.response residuals
+#' @importFrom stats AIC as.formula lm hatvalues model.frame model.matrix model.response residuals
 #' @importFrom utils combn
 mine <- function(data, response_var, model_func = lm,
                  max_degree = 3, max_interact_vars = 2, metric = AIC,
                  metric_comparison = min, keep_all_vars = FALSE,
                  method = "greedy", max_terms = NULL,
-                 lambda_rule = "lambda.min", ...) {
+                 lambda_rule = "lambda.min", verbose = TRUE, ...) {
   response_str <- as_string(enexpr(response_var))
   .mine_impl(data, response_str,
              model_func        = model_func,
@@ -102,6 +111,7 @@ mine <- function(data, response_var, model_func = lm,
              method            = method,
              max_terms         = max_terms,
              lambda_rule       = lambda_rule,
+             verbose           = verbose,
              ...)
 }
 
@@ -112,7 +122,7 @@ mine <- function(data, response_var, model_func = lm,
                        max_degree = 3, max_interact_vars = 2, metric = AIC,
                        metric_comparison = min, keep_all_vars = FALSE,
                        method = "greedy", max_terms = NULL,
-                       lambda_rule = "lambda.min", ...) {
+                       lambda_rule = "lambda.min", verbose = TRUE, ...) {
 
   if (!is.function(method)) {
     method <- match.arg(method, c("greedy", "greedy_star",
@@ -210,14 +220,14 @@ mine <- function(data, response_var, model_func = lm,
                                Metric  = I(list()))
 
   if (intercept_ok) {
-    message("Formula: ", deparse1(start_formula), " Metric: ", start_metric)
+    if (verbose) message("Formula: ", deparse1(start_formula), " Metric: ", start_metric)
     start_results <- data.frame(
       Formula = deparse1(start_formula),
       Metric  = I(list(start_metric))
     )
   } else {
     # ---- Single-predictor fallback ----
-    message("Intercept-only model failed; trying each predictor individually...")
+    if (verbose) message("Intercept-only model failed; trying each predictor individually...")
     fallback_metrics  <- list()
     fallback_formulas <- list()
 
@@ -237,7 +247,7 @@ mine <- function(data, response_var, model_func = lm,
       })
       if (is.null(mv)) next
 
-      message("Formula: ", deparse1(f), " Metric: ", mv)
+      if (verbose) message("Formula: ", deparse1(f), " Metric: ", mv)
       fallback_formulas[[length(fallback_formulas) + 1L]] <- f
       fallback_metrics[[length(fallback_metrics) + 1L]]   <- mv
       start_results <- rbind(start_results,
@@ -257,7 +267,7 @@ mine <- function(data, response_var, model_func = lm,
     start_metric  <- fallback_metrics[[best_idx]]
     initial_terms <- all.vars(start_formula[[3]])
 
-    message("Selected fallback starting model: ", deparse1(start_formula),
+    if (verbose) message("Selected fallback starting model: ", deparse1(start_formula),
             " (metric: ", start_metric, ")")
   }
 
@@ -285,11 +295,14 @@ mine <- function(data, response_var, model_func = lm,
     model_func        = model_func,
     metric            = metric,
     metric_comparison = metric_comparison,
-    data              = data
+    data              = data,
+    verbose           = verbose
   )
 
   result <- if (is.function(method)) {
-    do.call(method, common_args)
+    # Custom methods may not accept 'verbose'; strip it to avoid errors.
+    custom_args <- common_args[names(common_args) != "verbose"]
+    do.call(method, custom_args)
   } else if (method == "greedy") {
     do.call(.mine_greedy, common_args)
   } else if (method == "greedy_star") {
@@ -322,8 +335,7 @@ mine <- function(data, response_var, model_func = lm,
                                 lambda_rule = lambda_rule, ...)))
   } else if (method == "lasso_path") {
     do.call(.mine_lasso_path,
-            c(common_args, list(response_str = response_str,
-                                lambda_rule = lambda_rule, ...)))
+            c(common_args, list(response_str = response_str, ...)))
   } else {
     do.call(.mine_exhaustive,
             c(common_args, list(response_str = response_str,
@@ -364,10 +376,12 @@ mine <- function(data, response_var, model_func = lm,
   # collected by compare_methods() or inspected programmatically.
   result$method <- if (is.function(method)) "custom" else method
 
-  message("\n-- Best formula ------------------------------------------")
-  message("Formula: ", deparse1(result$Formula))
-  message("Metric:  ", result$best_metric)
-  message("----------------------------------------------------------\n")
+  if (verbose) {
+    message("\n-- Best formula ------------------------------------------")
+    message("Formula: ", deparse1(result$Formula))
+    message("Metric:  ", result$best_metric)
+    message("----------------------------------------------------------\n")
+  }
 
   result
 }

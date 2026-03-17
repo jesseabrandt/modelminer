@@ -274,10 +274,12 @@ make_cv_metric <- function(k = 10, seed = 1L) {
     old_seed <- if (exists(".Random.seed", envir = globalenv(), inherits = FALSE))
       get(".Random.seed", envir = globalenv()) else NULL
     on.exit({
-      if (is.null(old_seed))
-        rm(".Random.seed", envir = globalenv())
-      else
+      if (is.null(old_seed)) {
+        if (exists(".Random.seed", envir = globalenv(), inherits = FALSE))
+          rm(".Random.seed", envir = globalenv())
+      } else {
         assign(".Random.seed", old_seed, envir = globalenv())
+      }
     }, add = TRUE)
     set.seed(seed)
     folds <- sample(rep_len(seq_len(k), n))

@@ -62,6 +62,11 @@ compare_methods <- function(data, response_var, configs, ...) {
   defaults     <- list(...)
 
   details <- lapply(names(configs), function(nm) {
+    if (isTRUE(defaults[["verbose"]]) || is.null(defaults[["verbose"]])) {
+      # verbose defaults to TRUE in mine(), so show separators unless suppressed
+      if (is.null(configs[[nm]][["verbose"]]) || isTRUE(configs[[nm]][["verbose"]]))
+        message("\n=== Config: ", nm, " ===")
+    }
     cfg  <- modifyList(defaults, configs[[nm]])
     args <- c(list(data = data, response_str = response_str), cfg)
     tryCatch(

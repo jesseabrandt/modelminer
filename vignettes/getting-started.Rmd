@@ -33,10 +33,10 @@ wrapped with `formula_wrap()`.
 
 The simplest case — finding predictors of fuel economy in `mtcars`:
 
-```{r lm-example, results = "hide", message = FALSE}
+```{r lm-example, results = "hide"}
 library(modelminer)
 
-lm_result <- mine(mtcars, mpg, max_degree = 2, max_interact_vars = 2)
+lm_result <- mine(mtcars, mpg, max_degree = 2, max_interact_vars = 2, verbose = FALSE)
 ```
 
 ```{r lm-result}
@@ -65,12 +65,13 @@ the signature compatible with what `mine()` expects.
 Here we search for predictors of transmission type in `mtcars` (`am`: 0 =
 automatic, 1 = manual):
 
-```{r glm-example, results = "hide", message = FALSE, warning = FALSE}
+```{r glm-example, results = "hide", warning = FALSE}
 glm_result <- mine(
   mtcars, am,
   model_func        = \(formula, data) glm(formula, data, family = binomial),
   max_degree        = 1,
-  max_interact_vars = 1
+  max_interact_vars = 1,
+  verbose           = FALSE
 )
 ```
 
@@ -99,7 +100,7 @@ glmnet via `formula_wrap()`.  These native methods let regularization
 handle selection in one shot, then refit with `lm` (or your `model_func`)
 for the final model:
 
-```{r lasso-example, eval = requireNamespace("glmnet", quietly = TRUE), results = "hide", message = FALSE}
+```{r lasso-example, eval = requireNamespace("glmnet", quietly = TRUE), results = "hide"}
 # Requires the glmnet package.
 # install.packages("glmnet")
 
@@ -107,7 +108,8 @@ lasso_result <- mine(
   mtcars, mpg,
   method            = "lasso",
   max_degree        = 2,
-  max_interact_vars = 2
+  max_interact_vars = 2,
+  verbose           = FALSE
 )
 ```
 
@@ -180,7 +182,7 @@ When experimenting with search settings — different algorithms, polynomial
 degrees, or interaction depth — `compare_methods()` runs multiple
 configurations and collects results in one call:
 
-```{r compare-example, results = "hide", message = FALSE}
+```{r compare-example, results = "hide"}
 cmp <- compare_methods(
   mtcars, mpg,
   configs = list(
@@ -188,7 +190,8 @@ cmp <- compare_methods(
     greedy_poly     = list(method = "greedy",          max_degree = 3),
     forward_backward = list(method = "forward_backward", max_degree = 1)
   ),
-  max_interact_vars = 1
+  max_interact_vars = 1,
+  verbose           = FALSE
 )
 ```
 

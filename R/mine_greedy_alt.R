@@ -27,11 +27,14 @@
 # Returns list(Formula, all_models) matching the mine() contract.
 .mine_greedy_alt <- function(candidate_terms, current_formula, current_metric,
                               results, model_func, metric, metric_comparison,
-                              data, predictor_vars, numeric_vars,
+                              data, verbose = TRUE, predictor_vars, numeric_vars,
                               max_degree, max_interact_vars,
                               full_interactions = FALSE,
                               do_backward = FALSE,
                               response_str = NULL) {
+
+  if (do_backward && is.null(response_str))
+    stop("response_str is required when do_backward = TRUE", call. = FALSE)
 
   # candidate_terms is the pre-built global pool passed by mine() for all
   # other algorithms. It is not used here; each phase builds its own pool.
@@ -45,17 +48,18 @@
     function(candidates, prior_terms, ...) {
       .greedy_phase_fb(candidates  = candidates,
                        prior_terms = prior_terms,
-                       response_str = response_str, ...)
+                       response_str = response_str,
+                       verbose = verbose, ...)
     }
   } else {
     function(candidates, prior_terms, ...) {
-      .greedy_phase(candidates = candidates, ...)
+      .greedy_phase(candidates = candidates, verbose = verbose, ...)
     }
   }
 
   # -- Phase 1: first-order terms ---------------------------------------------
 
-  message("\n-- Phase 1: first-order terms --")
+  if (verbose) message("\n-- Phase 1: first-order terms --")
   phase1 <- run_phase(
     candidates        = predictor_vars,
     prior_terms       = character(0),
@@ -92,7 +96,7 @@
   prior_after_1 <- attr(stats::terms(current_formula), "term.labels")
 
   if (length(poly_candidates) > 0) {
-    message("\n-- Phase 2: polynomial terms --")
+    if (verbose) message("\n-- Phase 2: polynomial terms --")
     phase2 <- run_phase(
       candidates        = poly_candidates,
       prior_terms       = prior_after_1,
@@ -108,7 +112,7 @@
     current_metric  <- phase2$metric
     results         <- phase2$results
   } else {
-    message("\n-- Phase 2: skipped (no numeric variables selected in phase 1) --")
+    if (verbose) message("\n-- Phase 2: skipped (no numeric variables selected in phase 1) --")
   }
 
   # -- Phase 3: interactions --------------------------------------------------
@@ -148,7 +152,7 @@
   prior_after_2 <- current_term_labels
 
   if (length(interact_candidates) > 0) {
-    message("\n-- Phase 3: interaction terms --")
+    if (verbose) message("\n-- Phase 3: interaction terms --")
     phase3 <- run_phase(
       candidates        = interact_candidates,
       prior_terms       = prior_after_2,
@@ -164,7 +168,7 @@
     current_metric  <- phase3$metric
     results         <- phase3$results
   } else {
-    message("\n-- Phase 3: skipped (fewer than 2 terms selected) --")
+    if (verbose) message("\n-- Phase 3: skipped (fewer than 2 terms selected) --")
   }
 
   list(Formula = current_formula, all_models = results)
@@ -178,17 +182,22 @@
 #
 # Returns list(formula, metric, results).
 .greedy_phase <- function(candidates, current_formula, current_metric,
-                           results, model_func, metric, metric_comparison, data) {
+                           results, model_func, metric, metric_comparison, data,
+                           verbose = TRUE) {
+
+  current_terms <- attr(stats::terms(current_formula), "term.labels")
+  response_str  <- as.character(current_formula[[2]])
 
   keep_going <- TRUE
   while (keep_going) {
     if (length(candidates) == 0) break
 
-    round_formulas <- character(0)
+    round_formulas <- list()
     round_metrics  <- list()
+    round_added    <- character(0)
 
     for (term in candidates) {
-      next_formula <- as.formula(paste(deparse1(current_formula), "+", term))
+      next_formula <- .build_formula(response_str, c(current_terms, term))
 
       next_model <- tryCatch(
         model_func(formula = next_formula, data = data),
@@ -210,13 +219,14 @@
       )
       if (is.null(next_metric)) next
 
-      message("Formula: ", deparse1(next_formula), " Metric: ", next_metric)
+      if (verbose) message("Formula: ", deparse1(next_formula), " Metric: ", next_metric)
 
       results        <- rbind(results,
                               data.frame(Formula = deparse1(next_formula),
                                          Metric  = I(list(next_metric))))
-      round_formulas <- c(round_formulas, deparse1(next_formula))
+      round_formulas <- c(round_formulas, list(next_formula))
       round_metrics  <- c(round_metrics, list(next_metric))
+      round_added    <- c(round_added, term)
     }
 
     if (length(round_formulas) == 0) break
@@ -230,10 +240,10 @@
     } else {
       current_metric  <- best_round_metric
       best_idx        <- which(sapply(round_metrics, identical, best_round_metric))[1]
-      current_formula <- as.formula(round_formulas[best_idx])
+      current_formula <- round_formulas[[best_idx]]
+      current_terms   <- c(current_terms, round_added[best_idx])
 
-      used_terms <- attr(stats::terms(current_formula), "term.labels")
-      candidates <- setdiff(candidates, used_terms)
+      candidates <- setdiff(candidates, current_terms)
     }
   }
 
@@ -258,7 +268,8 @@
 # Returns list(formula, metric, results, phase_terms).
 .greedy_phase_fb <- function(candidates, prior_terms, response_str,
                               current_formula, current_metric,
-                              results, model_func, metric, metric_comparison, data) {
+                              results, model_func, metric, metric_comparison, data,
+                              verbose = TRUE) {
 
   phase_terms <- character(0)
 
@@ -296,7 +307,7 @@
         )
         if (is.null(try_metric)) next
 
-        message("[fwd] Formula: ", deparse1(try_formula), " Metric: ", try_metric)
+        if (verbose) message("[fwd] Formula: ", deparse1(try_formula), " Metric: ", try_metric)
 
         results      <- rbind(results,
                               data.frame(Formula = deparse1(try_formula),
@@ -360,7 +371,7 @@
         )
         if (is.null(try_metric)) next
 
-        message("[bwd] Formula: ", deparse1(try_formula), " Metric: ", try_metric)
+        if (verbose) message("[bwd] Formula: ", deparse1(try_formula), " Metric: ", try_metric)
 
         results      <- rbind(results,
                               data.frame(Formula = deparse1(try_formula),

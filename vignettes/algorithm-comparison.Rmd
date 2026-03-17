@@ -60,8 +60,8 @@ dat1 <- data.frame(y = 2*x1 - 1.5*x2 + rnorm(n, sd = 1),
                    x1, x2, x3, x4, x5, x6, x7, x8)
 ```
 
-```{r scenario1-run, results="hide", message=FALSE}
-cmp1 <- compare_methods(dat1, y, configs = configs)
+```{r scenario1-run, results="hide"}
+cmp1 <- compare_methods(dat1, y, configs = configs, verbose = FALSE)
 ```
 
 ```{r scenario1-results}
@@ -85,8 +85,8 @@ dat2 <- data.frame(y = x1*x3 + rnorm(n, sd = 0.5),
                    x1, x2, x3, x4, x5, x6, x7, x8)
 ```
 
-```{r scenario2-run, results="hide", message=FALSE}
-cmp2 <- compare_methods(dat2, y, configs = configs)
+```{r scenario2-run, results="hide"}
+cmp2 <- compare_methods(dat2, y, configs = configs, verbose = FALSE)
 ```
 
 ```{r scenario2-results}
@@ -110,8 +110,8 @@ dat3 <- data.frame(y = 2*x1 + x2^2 + x3*x4 + rnorm(n, sd = 1),
                    x1, x2, x3, x4, x5, x6, x7, x8)
 ```
 
-```{r scenario3-run, results="hide", message=FALSE}
-cmp3 <- compare_methods(dat3, y, configs = configs)
+```{r scenario3-run, results="hide"}
+cmp3 <- compare_methods(dat3, y, configs = configs, verbose = FALSE)
 ```
 
 ```{r scenario3-results}
@@ -135,8 +135,8 @@ dat4 <- data.frame(y = 3*x1^2 + rnorm(n, sd = 1),
                    x1, x2, x3, x4, x5, x6, x7, x8)
 ```
 
-```{r scenario4-run, results="hide", message=FALSE}
-cmp4 <- compare_methods(dat4, y, configs = configs)
+```{r scenario4-run, results="hide"}
+cmp4 <- compare_methods(dat4, y, configs = configs, verbose = FALSE)
 ```
 
 ```{r scenario4-results}
@@ -147,8 +147,8 @@ cmp4$summary[, c("Config", "BestMetric", "ModelsEvaluated", "Formula")]
 
 ## Scenario 5: Real data (mtcars)
 
-```{r scenario5-run, results="hide", message=FALSE}
-cmp5 <- compare_methods(mtcars, mpg, configs = configs)
+```{r scenario5-run, results="hide"}
+cmp5 <- compare_methods(mtcars, mpg, configs = configs, verbose = FALSE)
 ```
 
 ```{r scenario5-results}
@@ -170,8 +170,8 @@ cv10 <- make_cv_metric(k = 10)
 
 ### Scenario 1
 
-```{r cv-scenario1-run, results="hide", message=FALSE}
-cmp1_loo <- compare_methods(dat1, y, configs = configs, metric = lm_loocv)
+```{r cv-scenario1-run, results="hide"}
+cmp1_loo <- compare_methods(dat1, y, configs = configs, metric = lm_loocv, verbose = FALSE)
 ```
 
 ```{r cv-scenario1-results}
@@ -180,8 +180,8 @@ cmp1_loo$summary[, c("Config", "BestMetric", "ModelsEvaluated", "Formula")]
 
 ### Scenario 2
 
-```{r cv-scenario2-run, results="hide", message=FALSE}
-cmp2_loo <- compare_methods(dat2, y, configs = configs, metric = lm_loocv)
+```{r cv-scenario2-run, results="hide"}
+cmp2_loo <- compare_methods(dat2, y, configs = configs, metric = lm_loocv, verbose = FALSE)
 ```
 
 ```{r cv-scenario2-results}
@@ -190,8 +190,8 @@ cmp2_loo$summary[, c("Config", "BestMetric", "ModelsEvaluated", "Formula")]
 
 ### Scenario 3
 
-```{r cv-scenario3-run, results="hide", message=FALSE}
-cmp3_loo <- compare_methods(dat3, y, configs = configs, metric = lm_loocv)
+```{r cv-scenario3-run, results="hide"}
+cmp3_loo <- compare_methods(dat3, y, configs = configs, metric = lm_loocv, verbose = FALSE)
 ```
 
 ```{r cv-scenario3-results}
@@ -200,8 +200,8 @@ cmp3_loo$summary[, c("Config", "BestMetric", "ModelsEvaluated", "Formula")]
 
 ### Scenario 4
 
-```{r cv-scenario4-run, results="hide", message=FALSE}
-cmp4_loo <- compare_methods(dat4, y, configs = configs, metric = lm_loocv)
+```{r cv-scenario4-run, results="hide"}
+cmp4_loo <- compare_methods(dat4, y, configs = configs, metric = lm_loocv, verbose = FALSE)
 ```
 
 ```{r cv-scenario4-results}
@@ -210,8 +210,8 @@ cmp4_loo$summary[, c("Config", "BestMetric", "ModelsEvaluated", "Formula")]
 
 ### Scenario 5 (mtcars) — lm_loocv
 
-```{r cv-scenario5-loo-run, results="hide", message=FALSE}
-cmp5_loo <- compare_methods(mtcars, mpg, configs = configs, metric = lm_loocv)
+```{r cv-scenario5-loo-run, results="hide"}
+cmp5_loo <- compare_methods(mtcars, mpg, configs = configs, metric = lm_loocv, verbose = FALSE)
 ```
 
 ```{r cv-scenario5-loo-results}
@@ -220,8 +220,8 @@ cmp5_loo$summary[, c("Config", "BestMetric", "ModelsEvaluated", "Formula")]
 
 ### Scenario 5 (mtcars) — 10-fold CV
 
-```{r cv-scenario5-cv10-run, results="hide", message=FALSE}
-cmp5_cv10 <- compare_methods(mtcars, mpg, configs = configs, metric = cv10)
+```{r cv-scenario5-cv10-run, results="hide"}
+cmp5_cv10 <- compare_methods(mtcars, mpg, configs = configs, metric = cv10, verbose = FALSE)
 ```
 
 ```{r cv-scenario5-cv10-results}

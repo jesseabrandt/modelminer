@@ -16,6 +16,7 @@ mine(
   method = "greedy",
   max_terms = NULL,
   lambda_rule = "lambda.min",
+  verbose = TRUE,
   ...
 )
 }
@@ -74,6 +75,10 @@ or \code{"lambda.1se"} (sparser, within 1 SE of the minimum). Both models
 appear in \code{all_models} regardless of this choice. Ignored by other
 methods.}
 
+\item{verbose}{If \code{TRUE} (the default), print progress messages showing
+each model evaluated during the search. Set to \code{FALSE} to suppress
+all iteration output.}
+
 \item{...}{Additional arguments forwarded to \code{\link[glmnet]{cv.glmnet}}
 (for \code{method = "lasso"}) or \code{\link[glmnet]{glmnet}} (for
 \code{method = "lasso_path"}). Common options include \code{alpha},
@@ -97,7 +102,11 @@ A list with five elements:
   }
 }
 \description{
-Automated model selection with feature engineering
+Starting from an intercept-only (or all-first-order) model, iteratively adds
+and optionally removes terms -- polynomial expansions, interactions, and
+first-order predictors -- that most improve a user-supplied metric. Multiple
+search strategies are available, from greedy forward selection to
+L1-regularised lasso.
 }
 \details{
 When \code{method} is a function it must accept at least these positional
