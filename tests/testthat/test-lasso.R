@@ -348,3 +348,25 @@ test_that(".extract_nonzero_cols handles multinomial coefficient list", {
   expect_true("x1" %in% nonzero)
   expect_true("x2" %in% nonzero)
 })
+
+test_that("lasso gives clear error when a response class has < 2 observations", {
+  skip_if_not_installed("glmnet")
+  df <- data.frame(y = factor(c("A", "A", "A", "B", "B", "B", "C")),
+                   x1 = rnorm(7), x2 = rnorm(7))
+  expect_error(
+    mine(df, y, method = "lasso", max_degree = 1, max_interact_vars = 1,
+         verbose = FALSE),
+    "Class.*'C'.*n=1"
+  )
+})
+
+test_that("lasso_path gives clear error when a response class has < 2 observations", {
+  skip_if_not_installed("glmnet")
+  df <- data.frame(y = factor(c("A", "A", "A", "B", "B", "B", "C")),
+                   x1 = rnorm(7), x2 = rnorm(7))
+  expect_error(
+    mine(df, y, method = "lasso_path", max_degree = 1, max_interact_vars = 1,
+         verbose = FALSE),
+    "Class.*'C'.*n=1"
+  )
+})

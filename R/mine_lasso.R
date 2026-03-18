@@ -104,6 +104,10 @@
     }
   }
 
+  # glmnet requires every class to have >= 2 observations for
+  # binomial/multinomial families.  Check early with a clear message.
+  .check_class_counts(y, dots[["family"]])
+
   cv_fit <- tryCatch(
     do.call(glmnet::cv.glmnet, c(list(x = x, y = y), dots)),
     error = function(e) {
@@ -231,6 +235,9 @@
       dots[["family"]] <- if (n_levels == 2L) "binomial" else "multinomial"
     }
   }
+
+  # glmnet requires every class to have >= 2 observations.
+  .check_class_counts(y, dots[["family"]])
 
   fit <- tryCatch(
     do.call(glmnet::glmnet, c(list(x = x, y = y), dots)),
@@ -389,4 +396,22 @@
   matched <- matched[!is.na(matched) & nchar(matched) > 0L]
 
   unique(matched)
+}
+
+
+# Check that every response class has >= 2 observations before calling glmnet.
+# glmnet's own error ("one multinomial or binomial class has 1 or 0
+# observations") doesn't say which class, making debugging hard.
+.check_class_counts <- function(y, family) {
+  if (is.null(family) || !family %in% c("binomial", "multinomial")) return(invisible())
+  counts <- table(y)
+  bad <- counts[counts < 2L]
+  if (length(bad) > 0L) {
+    detail <- paste0("'", names(bad), "' (n=", bad, ")", collapse = ", ")
+    stop("glmnet requires every response class to have at least 2 observations. ",
+         "Class(es) with fewer: ", detail, ". ",
+         "Consider dropping or merging rare classes before calling mine().",
+         call. = FALSE)
+  }
+  invisible()
 }
