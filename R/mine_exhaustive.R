@@ -44,6 +44,7 @@
 
   best_formula <- current_formula
   best_metric  <- current_metric
+  rc           <- .results_collector(results)
 
   for (k in seq_len(max_terms)) {
     n_subsets <- choose(length(candidate_terms), k)
@@ -54,41 +55,22 @@
     for (subset in subsets) {
       try_formula <- .build_formula(response_str, c(base_terms, subset))
 
-      try_model <- tryCatch(
-        model_func(formula = try_formula, data = data),
-        error = function(e) {
-          warning("Skipping subset {", paste(subset, collapse = ", "),
-                  "}: model fitting failed: ",
-                  conditionMessage(e), call. = FALSE)
-          NULL
-        }
-      )
-      if (is.null(try_model)) next
+      fit_result <- .try_fit_metric(try_formula, model_func, metric, data,
+                                    term_label = paste(subset, collapse = ", "),
+                                    verbose = verbose)
+      if (is.null(fit_result)) next
 
-      try_metric <- tryCatch(
-        metric(try_model),
-        error = function(e) {
-          warning("Skipping subset {", paste(subset, collapse = ", "),
-                  "}: metric computation failed: ",
-                  conditionMessage(e), call. = FALSE)
-          NULL
-        }
-      )
-      if (is.null(try_metric)) next
+      rc$collect(deparse1(try_formula), fit_result$metric)
 
-      results <- rbind(results,
-                       data.frame(Formula = deparse1(try_formula),
-                                  Metric  = I(list(try_metric))))
-
-      comparison <- do.call(metric_comparison, list(best_metric, try_metric))
-      if (!identical(comparison, best_metric)) {
-        best_metric  <- try_metric
+      if (.metric_improved(fit_result$metric, best_metric, metric_comparison)) {
+        best_metric  <- fit_result$metric
         best_formula <- try_formula
       }
     }
   }
 
-  if (verbose) message("Exhaustive search complete: evaluated ", nrow(results), " models.")
+  if (verbose) message("Exhaustive search complete: evaluated ",
+                       nrow(rc$finalize()), " models.")
 
-  list(Formula = best_formula, all_models = results)
+  list(Formula = best_formula, all_models = rc$finalize())
 }

@@ -21,6 +21,7 @@
   # .build_formula() rather than string-pasting onto deparse1() output.
   current_terms   <- attr(stats::terms(current_formula), "term.labels")
   response_str    <- as.character(current_formula[[2]])
+  rc              <- .results_collector(results)
 
   keep_going <- TRUE
   while (keep_going) {
@@ -39,52 +40,24 @@
     for (term in round_candidates) {
       next_formula <- .build_formula(response_str, c(current_terms, term))
 
-      next_model <- tryCatch(
-        model_func(formula = next_formula, data = data),
-        error = function(e) {
-          warning("Skipping term '", term, "': model fitting failed: ",
-                  conditionMessage(e), call. = FALSE)
-          NULL
-        }
-      )
-      if (is.null(next_model)) next
+      fit_result <- .try_fit_metric(next_formula, model_func, metric, data,
+                                    term_label = term, verbose = verbose)
+      if (is.null(fit_result)) next
 
-      next_metric <- tryCatch(
-        metric(next_model),
-        error = function(e) {
-          warning("Skipping term '", term, "': metric computation failed: ",
-                  conditionMessage(e), call. = FALSE)
-          NULL
-        }
-      )
-      if (is.null(next_metric)) next
-
-      if (verbose) message("Formula: ", deparse1(next_formula), " Metric: ", next_metric)
-
-      results        <- rbind(results,
-                              data.frame(Formula = deparse1(next_formula),
-                                         Metric  = I(list(next_metric))))
+      rc$collect(deparse1(next_formula), fit_result$metric)
       round_formulas <- c(round_formulas, list(next_formula))
-      round_metrics  <- c(round_metrics, list(next_metric))
+      round_metrics  <- c(round_metrics, list(fit_result$metric))
       round_added    <- c(round_added, term)
     }
 
     if (length(round_formulas) == 0) break  # every candidate failed to fit
 
-    best_round_metric  <- do.call(metric_comparison, round_metrics)
-    # Compare the round's best against the current model to decide whether to
-    # continue. Using identical() rather than == so non-numeric metrics work
-    # and floating-point equality is tested by value, not by ==.
-    best_global_metric <- do.call(metric_comparison,
-                                  c(list(current_metric), round_metrics))
-
-    if (identical(best_global_metric, current_metric)) {
+    if (!.metric_improved(do.call(metric_comparison, round_metrics),
+                          current_metric, metric_comparison)) {
       keep_going <- FALSE
     } else {
-      current_metric  <- best_round_metric
-      # If multiple terms tie on the metric, [1] picks the first one.
-      # Ties are rare in practice; the choice is deterministic but arbitrary.
-      best_idx        <- which(sapply(round_metrics, identical, best_round_metric))[1]
+      best_idx        <- .find_best_index(round_metrics, metric_comparison)
+      current_metric  <- round_metrics[[best_idx]]
       current_formula <- round_formulas[[best_idx]]
       current_terms   <- c(current_terms, round_added[best_idx])
 
@@ -93,5 +66,5 @@
     }
   }
 
-  list(Formula = current_formula, all_models = results)
+  list(Formula = current_formula, all_models = rc$finalize())
 }

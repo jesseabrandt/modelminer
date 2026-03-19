@@ -187,6 +187,7 @@
 
   current_terms <- attr(stats::terms(current_formula), "term.labels")
   response_str  <- as.character(current_formula[[2]])
+  rc            <- .results_collector(results)
 
   keep_going <- TRUE
   while (keep_going) {
@@ -199,47 +200,24 @@
     for (term in candidates) {
       next_formula <- .build_formula(response_str, c(current_terms, term))
 
-      next_model <- tryCatch(
-        model_func(formula = next_formula, data = data),
-        error = function(e) {
-          warning("Skipping term '", term, "': model fitting failed: ",
-                  conditionMessage(e), call. = FALSE)
-          NULL
-        }
-      )
-      if (is.null(next_model)) next
+      fit_result <- .try_fit_metric(next_formula, model_func, metric, data,
+                                    term_label = term, verbose = verbose)
+      if (is.null(fit_result)) next
 
-      next_metric <- tryCatch(
-        metric(next_model),
-        error = function(e) {
-          warning("Skipping term '", term, "': metric computation failed: ",
-                  conditionMessage(e), call. = FALSE)
-          NULL
-        }
-      )
-      if (is.null(next_metric)) next
-
-      if (verbose) message("Formula: ", deparse1(next_formula), " Metric: ", next_metric)
-
-      results        <- rbind(results,
-                              data.frame(Formula = deparse1(next_formula),
-                                         Metric  = I(list(next_metric))))
+      rc$collect(deparse1(next_formula), fit_result$metric)
       round_formulas <- c(round_formulas, list(next_formula))
-      round_metrics  <- c(round_metrics, list(next_metric))
+      round_metrics  <- c(round_metrics, list(fit_result$metric))
       round_added    <- c(round_added, term)
     }
 
     if (length(round_formulas) == 0) break
 
-    best_round_metric  <- do.call(metric_comparison, round_metrics)
-    best_global_metric <- do.call(metric_comparison,
-                                  c(list(current_metric), round_metrics))
-
-    if (identical(best_global_metric, current_metric)) {
+    if (!.metric_improved(do.call(metric_comparison, round_metrics),
+                          current_metric, metric_comparison)) {
       keep_going <- FALSE
     } else {
-      current_metric  <- best_round_metric
-      best_idx        <- which(sapply(round_metrics, identical, best_round_metric))[1]
+      best_idx        <- .find_best_index(round_metrics, metric_comparison)
+      current_metric  <- round_metrics[[best_idx]]
       current_formula <- round_formulas[[best_idx]]
       current_terms   <- c(current_terms, round_added[best_idx])
 
@@ -247,7 +225,7 @@
     }
   }
 
-  list(formula = current_formula, metric = current_metric, results = results)
+  list(formula = current_formula, metric = current_metric, results = rc$finalize())
 }
 
 
@@ -272,6 +250,7 @@
                               verbose = TRUE) {
 
   phase_terms <- character(0)
+  rc          <- .results_collector(results)
 
   keep_going <- TRUE
   while (keep_going) {
@@ -287,43 +266,22 @@
       for (term in candidates) {
         try_formula <- .build_formula(response_str, c(prior_terms, phase_terms, term))
 
-        try_model <- tryCatch(
-          model_func(formula = try_formula, data = data),
-          error = function(e) {
-            warning("Skipping term '", term, "' (forward): model fitting failed: ",
-                    conditionMessage(e), call. = FALSE)
-            NULL
-          }
-        )
-        if (is.null(try_model)) next
+        fit_result <- .try_fit_metric(try_formula, model_func, metric, data,
+                                      term_label = term, direction = "fwd",
+                                      verbose = verbose)
+        if (is.null(fit_result)) next
 
-        try_metric <- tryCatch(
-          metric(try_model),
-          error = function(e) {
-            warning("Skipping term '", term, "' (forward): metric computation failed: ",
-                    conditionMessage(e), call. = FALSE)
-            NULL
-          }
-        )
-        if (is.null(try_metric)) next
-
-        if (verbose) message("[fwd] Formula: ", deparse1(try_formula), " Metric: ", try_metric)
-
-        results      <- rbind(results,
-                              data.frame(Formula = deparse1(try_formula),
-                                         Metric  = I(list(try_metric))))
+        rc$collect(deparse1(try_formula), fit_result$metric)
         fwd_formulas <- c(fwd_formulas, deparse1(try_formula))
-        fwd_metrics  <- c(fwd_metrics, list(try_metric))
+        fwd_metrics  <- c(fwd_metrics, list(fit_result$metric))
         fwd_terms    <- c(fwd_terms, term)
       }
 
       if (length(fwd_formulas) > 0) {
-        best_fwd    <- do.call(metric_comparison, fwd_metrics)
-        best_global <- do.call(metric_comparison,
-                               c(list(current_metric), fwd_metrics))
+        best_fwd <- do.call(metric_comparison, fwd_metrics)
 
-        if (!identical(best_global, current_metric)) {
-          best_idx        <- which(sapply(fwd_metrics, identical, best_fwd))[1]
+        if (.metric_improved(best_fwd, current_metric, metric_comparison)) {
+          best_idx        <- .find_best_index(fwd_metrics, metric_comparison)
           new_term        <- fwd_terms[best_idx]
           phase_terms     <- c(phase_terms, new_term)
           candidates      <- setdiff(candidates,
@@ -351,43 +309,22 @@
         remaining   <- setdiff(phase_terms, term)
         try_formula <- .build_formula(response_str, c(prior_terms, remaining))
 
-        try_model <- tryCatch(
-          model_func(formula = try_formula, data = data),
-          error = function(e) {
-            warning("Skipping removal of '", term, "' (backward): model fitting failed: ",
-                    conditionMessage(e), call. = FALSE)
-            NULL
-          }
-        )
-        if (is.null(try_model)) next
+        fit_result <- .try_fit_metric(try_formula, model_func, metric, data,
+                                      term_label = term, direction = "bwd",
+                                      verbose = verbose)
+        if (is.null(fit_result)) next
 
-        try_metric <- tryCatch(
-          metric(try_model),
-          error = function(e) {
-            warning("Skipping removal of '", term, "' (backward): metric computation failed: ",
-                    conditionMessage(e), call. = FALSE)
-            NULL
-          }
-        )
-        if (is.null(try_metric)) next
-
-        if (verbose) message("[bwd] Formula: ", deparse1(try_formula), " Metric: ", try_metric)
-
-        results      <- rbind(results,
-                              data.frame(Formula = deparse1(try_formula),
-                                         Metric  = I(list(try_metric))))
+        rc$collect(deparse1(try_formula), fit_result$metric)
         bwd_formulas <- c(bwd_formulas, deparse1(try_formula))
-        bwd_metrics  <- c(bwd_metrics, list(try_metric))
+        bwd_metrics  <- c(bwd_metrics, list(fit_result$metric))
         bwd_removed  <- c(bwd_removed, term)
       }
 
       if (length(bwd_formulas) > 0) {
-        best_bwd    <- do.call(metric_comparison, bwd_metrics)
-        best_global <- do.call(metric_comparison,
-                               c(list(current_metric), bwd_metrics))
+        best_bwd <- do.call(metric_comparison, bwd_metrics)
 
-        if (!identical(best_global, current_metric)) {
-          best_idx        <- which(sapply(bwd_metrics, identical, best_bwd))[1]
+        if (.metric_improved(best_bwd, current_metric, metric_comparison)) {
+          best_idx        <- .find_best_index(bwd_metrics, metric_comparison)
           dropped_term    <- bwd_removed[best_idx]
           phase_terms     <- setdiff(phase_terms, dropped_term)
           candidates      <- c(candidates, dropped_term)
@@ -403,6 +340,6 @@
 
   list(formula     = current_formula,
        metric      = current_metric,
-       results     = results,
+       results     = rc$finalize(),
        phase_terms = phase_terms)
 }

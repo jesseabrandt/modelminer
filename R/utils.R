@@ -45,3 +45,73 @@ to_xy <- function(data, formula) {
 
   return(list(y = y, x = x))
 }
+
+# Tolerance-aware check: did new_metric improve over old_metric?
+.metric_improved <- function(new_metric, old_metric, metric_comparison) {
+  best <- do.call(metric_comparison, list(old_metric, new_metric))
+  if (is.numeric(best) && length(best) == 1L &&
+      is.numeric(old_metric) && length(old_metric) == 1L) {
+    !isTRUE(all.equal(best, old_metric))
+  } else {
+    !identical(best, old_metric)
+  }
+}
+
+# Find index of best metric in a list, using tolerance for numerics.
+.find_best_index <- function(metrics, metric_comparison) {
+  best <- do.call(metric_comparison, metrics)
+  if (is.numeric(best) && length(best) == 1L) {
+    which(vapply(metrics, function(m) {
+      is.numeric(m) && length(m) == 1L && isTRUE(all.equal(m, best))
+    }, logical(1)))[1L]
+  } else {
+    which(vapply(metrics, identical, logical(1), best))[1L]
+  }
+}
+
+# Try fitting a model and computing its metric. Returns list(metric=) or NULL.
+.try_fit_metric <- function(formula, model_func, metric, data,
+                            term_label = "", direction = "", verbose = TRUE) {
+  model <- tryCatch(
+    model_func(formula = formula, data = data),
+    error = function(e) {
+      warning("Skipping ", if (nzchar(direction)) paste0("(", direction, ") "),
+              "term '", term_label, "': model fitting failed: ",
+              conditionMessage(e), call. = FALSE)
+      NULL
+    }
+  )
+  if (is.null(model)) return(NULL)
+
+  met <- tryCatch(
+    metric(model),
+    error = function(e) {
+      warning("Skipping ", if (nzchar(direction)) paste0("(", direction, ") "),
+              "term '", term_label, "': metric computation failed: ",
+              conditionMessage(e), call. = FALSE)
+      NULL
+    }
+  )
+  if (is.null(met)) return(NULL)
+
+  if (verbose) {
+    prefix <- if (nzchar(direction)) paste0("[", direction, "] ") else ""
+    message(prefix, "Formula: ", deparse1(formula), " Metric: ", met)
+  }
+  list(metric = met)
+}
+
+# List-based result accumulator to avoid O(n^2) rbind.
+.results_collector <- function(initial_results) {
+  chunks <- list(initial_results)
+  list(
+    collect = function(formula_str, metric_val) {
+      chunks[[length(chunks) + 1L]] <<- data.frame(
+        Formula = formula_str, Metric = I(list(metric_val))
+      )
+    },
+    finalize = function() {
+      do.call(rbind, chunks)
+    }
+  )
+}

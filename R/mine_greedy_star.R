@@ -50,6 +50,7 @@
   # Track current terms explicitly for .build_formula() usage.
   current_terms <- attr(stats::terms(current_formula), "term.labels")
   response_str  <- as.character(current_formula[[2]])
+  rc            <- .results_collector(results)
 
   keep_going <- TRUE
   while (keep_going) {
@@ -64,47 +65,24 @@
       # expands a*b into a + b + a:b automatically.
       next_formula <- .build_formula(response_str, c(current_terms, term))
 
-      next_model <- tryCatch(
-        model_func(formula = next_formula, data = data),
-        error = function(e) {
-          warning("Skipping term '", term, "': model fitting failed: ",
-                  conditionMessage(e), call. = FALSE)
-          NULL
-        }
-      )
-      if (is.null(next_model)) next
+      fit_result <- .try_fit_metric(next_formula, model_func, metric, data,
+                                    term_label = term, verbose = verbose)
+      if (is.null(fit_result)) next
 
-      next_metric <- tryCatch(
-        metric(next_model),
-        error = function(e) {
-          warning("Skipping term '", term, "': metric computation failed: ",
-                  conditionMessage(e), call. = FALSE)
-          NULL
-        }
-      )
-      if (is.null(next_metric)) next
-
-      if (verbose) message("Formula: ", deparse1(next_formula), " Metric: ", next_metric)
-
-      results        <- rbind(results,
-                              data.frame(Formula = deparse1(next_formula),
-                                         Metric  = I(list(next_metric))))
+      rc$collect(deparse1(next_formula), fit_result$metric)
       round_formulas <- c(round_formulas, list(next_formula))
-      round_metrics  <- c(round_metrics, list(next_metric))
+      round_metrics  <- c(round_metrics, list(fit_result$metric))
       round_terms    <- c(round_terms, term)
     }
 
     if (length(round_formulas) == 0) break
 
-    best_round_metric  <- do.call(metric_comparison, round_metrics)
-    best_global_metric <- do.call(metric_comparison,
-                                  c(list(current_metric), round_metrics))
-
-    if (identical(best_global_metric, current_metric)) {
+    if (!.metric_improved(do.call(metric_comparison, round_metrics),
+                          current_metric, metric_comparison)) {
       keep_going <- FALSE
     } else {
-      current_metric  <- best_round_metric
-      best_idx        <- which(sapply(round_metrics, identical, best_round_metric))[1]
+      best_idx        <- .find_best_index(round_metrics, metric_comparison)
+      current_metric  <- round_metrics[[best_idx]]
       current_formula <- round_formulas[[best_idx]]
 
       # Prune by expanded term labels (covers first-order and : components of
@@ -117,5 +95,5 @@
     }
   }
 
-  list(Formula = current_formula, all_models = results)
+  list(Formula = current_formula, all_models = rc$finalize())
 }

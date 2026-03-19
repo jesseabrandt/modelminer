@@ -24,6 +24,7 @@
   # Terms currently in the model, tracked in : notation. Starts populated
   # when keep_all_vars = TRUE so those terms are eligible for backward removal.
   added_terms <- initial_terms
+  rc          <- .results_collector(results)
 
   keep_going <- TRUE
   while (keep_going) {
@@ -42,43 +43,22 @@
       for (term in fwd_candidates) {
         try_formula <- .build_formula(response_str, c(added_terms, term))
 
-        try_model <- tryCatch(
-          model_func(formula = try_formula, data = data),
-          error = function(e) {
-            warning("Skipping term '", term, "' (forward): model fitting failed: ",
-                    conditionMessage(e), call. = FALSE)
-            NULL
-          }
-        )
-        if (is.null(try_model)) next
+        fit_result <- .try_fit_metric(try_formula, model_func, metric, data,
+                                      term_label = term, direction = "fwd",
+                                      verbose = verbose)
+        if (is.null(fit_result)) next
 
-        try_metric <- tryCatch(
-          metric(try_model),
-          error = function(e) {
-            warning("Skipping term '", term, "' (forward): metric computation failed: ",
-                    conditionMessage(e), call. = FALSE)
-            NULL
-          }
-        )
-        if (is.null(try_metric)) next
-
-        if (verbose) message("[fwd] Formula: ", deparse1(try_formula), " Metric: ", try_metric)
-
-        results      <- rbind(results,
-                              data.frame(Formula = deparse1(try_formula),
-                                         Metric  = I(list(try_metric))))
+        rc$collect(deparse1(try_formula), fit_result$metric)
         fwd_formulas <- c(fwd_formulas, deparse1(try_formula))
-        fwd_metrics  <- c(fwd_metrics, list(try_metric))
+        fwd_metrics  <- c(fwd_metrics, list(fit_result$metric))
         fwd_terms    <- c(fwd_terms, term)
       }
 
       if (length(fwd_formulas) > 0) {
-        best_fwd    <- do.call(metric_comparison, fwd_metrics)
-        best_global <- do.call(metric_comparison,
-                               c(list(current_metric), fwd_metrics))
+        best_fwd <- do.call(metric_comparison, fwd_metrics)
 
-        if (!identical(best_global, current_metric)) {
-          best_idx        <- which(sapply(fwd_metrics, identical, best_fwd))[1]
+        if (.metric_improved(best_fwd, current_metric, metric_comparison)) {
+          best_idx        <- .find_best_index(fwd_metrics, metric_comparison)
           new_term        <- fwd_terms[best_idx]
           added_terms     <- c(added_terms, new_term)
           current_formula <- as.formula(fwd_formulas[best_idx])
@@ -102,43 +82,22 @@
       for (term in added_terms) {
         try_formula <- .build_formula(response_str, setdiff(added_terms, term))
 
-        try_model <- tryCatch(
-          model_func(formula = try_formula, data = data),
-          error = function(e) {
-            warning("Skipping removal of '", term, "' (backward): model fitting failed: ",
-                    conditionMessage(e), call. = FALSE)
-            NULL
-          }
-        )
-        if (is.null(try_model)) next
+        fit_result <- .try_fit_metric(try_formula, model_func, metric, data,
+                                      term_label = term, direction = "bwd",
+                                      verbose = verbose)
+        if (is.null(fit_result)) next
 
-        try_metric <- tryCatch(
-          metric(try_model),
-          error = function(e) {
-            warning("Skipping removal of '", term, "' (backward): metric computation failed: ",
-                    conditionMessage(e), call. = FALSE)
-            NULL
-          }
-        )
-        if (is.null(try_metric)) next
-
-        if (verbose) message("[bwd] Formula: ", deparse1(try_formula), " Metric: ", try_metric)
-
-        results      <- rbind(results,
-                              data.frame(Formula = deparse1(try_formula),
-                                         Metric  = I(list(try_metric))))
+        rc$collect(deparse1(try_formula), fit_result$metric)
         bwd_formulas <- c(bwd_formulas, deparse1(try_formula))
-        bwd_metrics  <- c(bwd_metrics, list(try_metric))
+        bwd_metrics  <- c(bwd_metrics, list(fit_result$metric))
         bwd_removed  <- c(bwd_removed, term)
       }
 
       if (length(bwd_formulas) > 0) {
-        best_bwd    <- do.call(metric_comparison, bwd_metrics)
-        best_global <- do.call(metric_comparison,
-                               c(list(current_metric), bwd_metrics))
+        best_bwd <- do.call(metric_comparison, bwd_metrics)
 
-        if (!identical(best_global, current_metric)) {
-          best_idx        <- which(sapply(bwd_metrics, identical, best_bwd))[1]
+        if (.metric_improved(best_bwd, current_metric, metric_comparison)) {
+          best_idx        <- .find_best_index(bwd_metrics, metric_comparison)
           dropped_term    <- bwd_removed[best_idx]
           added_terms     <- setdiff(added_terms, dropped_term)
           # The dropped term goes back into the candidate pool; a later forward
@@ -154,5 +113,5 @@
     if (!changed) keep_going <- FALSE
   }
 
-  list(Formula = current_formula, all_models = results)
+  list(Formula = current_formula, all_models = rc$finalize())
 }

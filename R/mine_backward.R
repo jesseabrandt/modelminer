@@ -19,6 +19,7 @@
                            initial_terms = character(0)) {
 
   current_terms <- initial_terms
+  rc            <- .results_collector(results)
 
   while (length(current_terms) > 0) {
     bwd_formulas <- character(0)
@@ -28,46 +29,25 @@
     for (term in current_terms) {
       try_formula <- .build_formula(response_str, setdiff(current_terms, term))
 
-      try_model <- tryCatch(
-        model_func(formula = try_formula, data = data),
-        error = function(e) {
-          warning("Skipping removal of '", term, "' (backward): model fitting failed: ",
-                  conditionMessage(e), call. = FALSE)
-          NULL
-        }
-      )
-      if (is.null(try_model)) next
+      fit_result <- .try_fit_metric(try_formula, model_func, metric, data,
+                                    term_label = term, direction = "bwd",
+                                    verbose = verbose)
+      if (is.null(fit_result)) next
 
-      try_metric <- tryCatch(
-        metric(try_model),
-        error = function(e) {
-          warning("Skipping removal of '", term, "' (backward): metric computation failed: ",
-                  conditionMessage(e), call. = FALSE)
-          NULL
-        }
-      )
-      if (is.null(try_metric)) next
-
-      if (verbose) message("[bwd] Formula: ", deparse1(try_formula), " Metric: ", try_metric)
-
-      results      <- rbind(results,
-                            data.frame(Formula = deparse1(try_formula),
-                                       Metric  = I(list(try_metric))))
+      rc$collect(deparse1(try_formula), fit_result$metric)
       bwd_formulas <- c(bwd_formulas, deparse1(try_formula))
-      bwd_metrics  <- c(bwd_metrics, list(try_metric))
+      bwd_metrics  <- c(bwd_metrics, list(fit_result$metric))
       bwd_removed  <- c(bwd_removed, term)
     }
 
     if (length(bwd_formulas) == 0) break
 
-    best_bwd    <- do.call(metric_comparison, bwd_metrics)
-    best_global <- do.call(metric_comparison,
-                           c(list(current_metric), bwd_metrics))
+    best_bwd <- do.call(metric_comparison, bwd_metrics)
 
-    if (identical(best_global, current_metric)) {
+    if (!.metric_improved(best_bwd, current_metric, metric_comparison)) {
       break
     } else {
-      best_idx        <- which(sapply(bwd_metrics, identical, best_bwd))[1]
+      best_idx        <- .find_best_index(bwd_metrics, metric_comparison)
       dropped_term    <- bwd_removed[best_idx]
       current_terms   <- setdiff(current_terms, dropped_term)
       current_formula <- as.formula(bwd_formulas[best_idx])
@@ -75,5 +55,5 @@
     }
   }
 
-  list(Formula = current_formula, all_models = results)
+  list(Formula = current_formula, all_models = rc$finalize())
 }

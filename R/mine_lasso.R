@@ -117,6 +117,7 @@
 
   # ---- Extract selected terms for both lambda rules ----
 
+  rc <- .results_collector(results)
   formulas_out <- list()
   for (rule in c("lambda.min", "lambda.1se")) {
     lam <- cv_fit[[rule]]
@@ -147,16 +148,14 @@
     if (verbose) message("[lasso:", rule, "] Formula: ", deparse1(f),
             " Metric: ", met, " (CV: ", round(cv_mse, 4), ")")
 
-    results <- rbind(results,
-                     data.frame(Formula = deparse1(f),
-                                Metric  = I(list(met))))
+    rc$collect(deparse1(f), met)
 
     formulas_out[[rule]] <- f
   }
 
   best_formula <- formulas_out[[lambda_rule]]
 
-  list(Formula = best_formula, all_models = results)
+  list(Formula = best_formula, all_models = rc$finalize())
 }
 
 
@@ -255,7 +254,8 @@
   best_formula    <- current_formula
   best_metric     <- current_metric
   prev_key        <- ""  # track previous variable set to skip duplicates
-  n_before        <- nrow(results)
+  rc              <- .results_collector(results)
+  n_path_models   <- 0L
 
   for (i in seq_along(fit$lambda)) {
     if (is_multinomial) {
@@ -293,9 +293,8 @@
             " terms=", n_terms,
             " Formula: ", deparse1(f), " Metric: ", met)
 
-    results <- rbind(results,
-                     data.frame(Formula = deparse1(f),
-                                Metric  = I(list(met))))
+    rc$collect(deparse1(f), met)
+    n_path_models <- n_path_models + 1L
 
     # Track best model.  Guard against best_metric being NA (e.g. when the
     # intercept-only starting model failed and current_metric was set to a
@@ -305,19 +304,16 @@
       if (is.na(best_metric)) {
         best_metric  <- met
         best_formula <- f
-      } else {
-        comparison <- do.call(metric_comparison, list(best_metric, met))
-        if (!identical(comparison, best_metric)) {
-          best_metric  <- met
-          best_formula <- f
-        }
+      } else if (.metric_improved(met, best_metric, metric_comparison)) {
+        best_metric  <- met
+        best_formula <- f
       }
     }
   }
 
-  if (verbose) message("Lasso path complete: ", nrow(results) - n_before, " distinct models evaluated.")
+  if (verbose) message("Lasso path complete: ", n_path_models, " distinct models evaluated.")
 
-  list(Formula = best_formula, all_models = results)
+  list(Formula = best_formula, all_models = rc$finalize())
 }
 
 
