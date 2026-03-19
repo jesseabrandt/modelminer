@@ -55,6 +55,46 @@ test_that("mine makes more than one greedy step on a simple dataset", {
   expect_true("x2" %in% final_labels)
 })
 
+# Input validation -----------------------------------------------------------
+
+test_that("mine() errors on non-data.frame input", {
+  expect_error(mine(as.matrix(mtcars), mpg), "must be a data frame")
+})
+
+test_that("mine() errors on empty data frame", {
+  expect_error(mine(mtcars[0, ], mpg), "no rows")
+})
+
+test_that("mine() errors on missing response variable", {
+  expect_error(mine(mtcars, nonexistent), "not found")
+})
+
+test_that("mine() warns and handles NAs in data", {
+  d <- mtcars
+  d$wt[1:3] <- NA
+  expect_warning(
+    result <- mine(d, mpg, max_degree = 1, max_interact_vars = 1, verbose = FALSE),
+    "Dropped 3 row"
+  )
+  expect_s3_class(result$Formula, "formula")
+})
+
+test_that("mine() warns about small-n with AIC", {
+  d <- mtcars[1:5, c("mpg", "wt", "hp", "cyl", "disp", "drat")]
+  expect_warning(
+    mine(d, mpg, max_degree = 1, max_interact_vars = 1, verbose = FALSE),
+    "AIC may be unreliable"
+  )
+})
+
+test_that("mine() warns about ignored ... for non-lasso methods", {
+  expect_warning(
+    mine(mtcars, mpg, method = "greedy", max_degree = 1, max_interact_vars = 1,
+         verbose = FALSE, alpha = 0.5),
+    "ignored"
+  )
+})
+
 test_that("metric_comparison = max works (e.g. log-likelihood)", {
   log_lik <- function(m) as.numeric(logLik(m))
   result <- mine(mtcars, mpg, metric = log_lik, metric_comparison = max,

@@ -124,6 +124,16 @@ mine <- function(data, response_var, model_func = lm,
                        method = "greedy", max_terms = NULL,
                        lambda_rule = "lambda.min", verbose = TRUE, ...) {
 
+  # Input validation
+  if (!is.data.frame(data))
+    stop("'data' must be a data frame.", call. = FALSE)
+  if (nrow(data) == 0L)
+    stop("'data' has no rows.", call. = FALSE)
+  if (!response_str %in% names(data))
+    stop("Response variable '", response_str, "' not found in data.", call. = FALSE)
+  if (ncol(data) < 2L)
+    stop("'data' must have at least 2 columns (response + 1 predictor).", call. = FALSE)
+
   if (!is.function(method)) {
     method <- match.arg(method, c("greedy", "greedy_star",
                                    "greedy_alt", "greedy_alt_full",
@@ -135,6 +145,30 @@ mine <- function(data, response_var, model_func = lm,
   # ---- Shared setup: candidate term pool ----
 
   predictor_vars  <- setdiff(names(data), response_str)
+
+  # NA handling: drop incomplete rows and warn
+  used_cols <- c(response_str, predictor_vars)
+  complete <- stats::complete.cases(data[, used_cols, drop = FALSE])
+  if (!all(complete)) {
+    n_drop <- sum(!complete)
+    warning("Dropped ", n_drop, " row(s) with NA values in response/predictor columns. ",
+            "All candidate models will be fit on the same ", sum(complete), " complete rows.",
+            call. = FALSE)
+    data <- data[complete, , drop = FALSE]
+  }
+
+  # Small-n AIC warning
+  if (identical(metric, AIC)) {
+    n <- nrow(data)
+    p <- length(predictor_vars)
+    if (p > 0 && n < 10 * p) {
+      warning("AIC may be unreliable with only ", n, " observations and ", p,
+              " predictors (ratio ", round(n / p, 1), ":1). ",
+              "Consider using make_cv_metric() or lm_loocv for small samples.",
+              call. = FALSE)
+    }
+  }
+
   candidate_terms <- predictor_vars
 
   # Only numeric variables can be raised to a power; factors are excluded.
@@ -272,6 +306,17 @@ mine <- function(data, response_var, model_func = lm,
   }
 
   # ---- Dispatch to search algorithm ----
+
+  # Warn about ignored ... for non-lasso methods
+  dots <- list(...)
+  if (length(dots) > 0 && !is.function(method) &&
+      !method %in% c("lasso", "lasso_path")) {
+    dot_names <- if (is.null(names(dots))) "(unnamed)" else paste(names(dots), collapse = ", ")
+    warning("Extra arguments (", dot_names,
+            ") are ignored for method = '", method, "'. ",
+            "Only 'lasso' and 'lasso_path' forward ... to glmnet.",
+            call. = FALSE)
+  }
 
   candidate_terms <- setdiff(candidate_terms, initial_terms)
 

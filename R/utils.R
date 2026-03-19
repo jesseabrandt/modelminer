@@ -21,8 +21,16 @@
 .eligible_candidates <- function(candidate_terms, current_formula) {
   current_labels <- attr(stats::terms(current_formula), "term.labels")
   Filter(function(t) {
+    # Polynomial marginality: I(var^k) requires var in model
     bv <- .poly_base_var(t)
-    is.na(bv) || bv %in% current_labels
+    if (!is.na(bv)) return(bv %in% current_labels)
+
+    # Interaction marginality: a:b requires both a and b in model
+    parts <- strsplit(t, ":", fixed = TRUE)[[1]]
+    if (length(parts) > 1L) return(all(parts %in% current_labels))
+
+    # First-order terms always eligible
+    TRUE
   }, candidate_terms)
 }
 

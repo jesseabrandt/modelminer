@@ -168,7 +168,12 @@ extract_metric.rpart <- function(model, ...) {
 #   \(m) m$dev / m$frame$dev[1]   # relative deviance (normalised to root)
 #
 #' @export
-extract_metric.tree <- function(model, ...) model$dev
+extract_metric.tree <- function(model, ...) {
+  warning("extract_metric.tree() returns training deviance, which favours ",
+          "larger trees. For model selection, consider tree::cv.tree() or ",
+          "a custom metric function.", call. = FALSE)
+  model$dev
+}
 
 
 # gbm (gbm::gbm) -----------------------------------------------------------
@@ -220,6 +225,11 @@ extract_metric.GBMFit <- function(model, ...) {
 #' result <- mine(mtcars, mpg, metric = lm_loocv)
 #' result$Formula
 lm_loocv <- function(model) {
+  if (!inherits(model, "lm") || inherits(model, "glm")) {
+    stop("lm_loocv() uses the hat-matrix shortcut and is only valid for ",
+         "ordinary least-squares (lm) models. Got class: '",
+         paste(class(model), collapse = "/"), "'.", call. = FALSE)
+  }
   mean((residuals(model) / (1 - hatvalues(model)))^2)
 }
 
@@ -261,6 +271,13 @@ make_cv_metric <- function(k = 10, seed = 1L) {
   force(seed)
 
   function(model) {
+    if (!inherits(model, "lm") || inherits(model, "glm")) {
+      stop("make_cv_metric() uses lm.fit internally and only works with ",
+           "ordinary least-squares (lm) models. Got class: '",
+           paste(class(model), collapse = "/"), "'. ",
+           "For other model types, write a custom CV metric function.",
+           call. = FALSE)
+    }
     # Use model.matrix() rather than re-evaluating the formula on fold subsets.
     # Formula re-evaluation fails when a predictor appears only inside an
     # interaction (e.g. cyl:wt with no standalone wt term) because the
@@ -269,6 +286,11 @@ make_cv_metric <- function(k = 10, seed = 1L) {
     X <- model.matrix(model)
     y <- model.response(model.frame(model))
     n <- length(y)
+
+    if (k > n) {
+      stop("make_cv_metric: k (", k, ") exceeds n (", n, "). ",
+           "Use k <= n, or lm_loocv for leave-one-out.", call. = FALSE)
+    }
 
     # Save and restore RNG state so callers' randomness is not affected.
     old_seed <- if (exists(".Random.seed", envir = globalenv(), inherits = FALSE))
@@ -347,7 +369,7 @@ make_cv_metric <- function(k = 10, seed = 1L) {
 # where sigma2_full = summary(full)$sigma^2 = RSS_full / (n - p_full).
 make_cp_metric <- function(full_model) {
   mse_full <- summary(full_model)$sigma^2
-  if (mse_full == 0) {
+  if (isTRUE(all.equal(mse_full, 0))) {
     stop("Full model has zero residual variance (perfect fit); ",
          "Cp is undefined.", call. = FALSE)
   }

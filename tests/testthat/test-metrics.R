@@ -153,8 +153,12 @@ test_that("rpart works for classification trees", {
 
 # extract_metric.tree ---------------------------------------------------------
 
-test_that("tree returns dev slot", {
-  expect_equal(extract_metric(mock_tree), 45.2)
+test_that("tree returns dev slot with warning", {
+  expect_warning(
+    result <- extract_metric(mock_tree),
+    "training deviance"
+  )
+  expect_equal(result, 45.2)
 })
 
 
@@ -181,7 +185,7 @@ test_that("all methods return numeric scalars", {
     extract_metric(mock_ranger),
     extract_metric(mock_rf_class),
     extract_metric(mock_rf_reg),
-    extract_metric(mock_tree),
+    suppressWarnings(extract_metric(mock_tree)),
     extract_metric(mock_gbm_cv)
   )
   for (r in results) {
@@ -220,6 +224,51 @@ test_that("list_metrics output mentions extract_metric default for known class",
   output <- capture.output(list_metrics(m))
   expect_true(any(grepl("extract_metric", output)))
   expect_true(any(grepl(round(AIC(m), 4), output, fixed = TRUE)))
+})
+
+
+# integration with mine() -----------------------------------------------------
+
+# lm_loocv class guards -------------------------------------------------------
+
+test_that("lm_loocv errors on glm models", {
+  m <- glm(am ~ wt + hp, data = mtcars, family = binomial)
+  expect_error(lm_loocv(m), "only valid for.*lm")
+})
+
+test_that("lm_loocv works on plain lm", {
+  m <- lm(mpg ~ wt, data = mtcars)
+  expect_no_error(lm_loocv(m))
+  expect_true(is.numeric(lm_loocv(m)))
+})
+
+# make_cv_metric class guards ------------------------------------------------
+
+test_that("make_cv_metric errors on glm models", {
+  cv5 <- make_cv_metric(k = 5)
+  m <- glm(am ~ wt + hp, data = mtcars, family = binomial)
+  expect_error(cv5(m), "only works with.*lm")
+})
+
+test_that("make_cv_metric works on plain lm", {
+  cv5 <- make_cv_metric(k = 5)
+  m <- lm(mpg ~ wt, data = mtcars)
+  expect_no_error(cv5(m))
+  expect_true(is.numeric(cv5(m)))
+})
+
+test_that("make_cv_metric errors when k > n", {
+  cv100 <- make_cv_metric(k = 100)
+  m <- lm(mpg ~ wt, data = mtcars)
+  expect_error(cv100(m), "k.*exceeds.*n")
+})
+
+# make_cp_metric guards -------------------------------------------------------
+
+test_that("make_cp_metric errors on near-zero sigma", {
+  d <- data.frame(x = 1:10, y = 1:10)
+  full <- lm(y ~ x, data = d)
+  expect_error(make_cp_metric(full), "zero residual variance")
 })
 
 
