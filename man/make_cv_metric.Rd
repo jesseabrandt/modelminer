@@ -4,12 +4,18 @@
 \alias{make_cv_metric}
 \title{K-fold cross-validation metric function}
 \usage{
-make_cv_metric(k = 10, seed = 1L)
+make_cv_metric(k = 10, seed = 1L, model_func = NULL)
 }
 \arguments{
 \item{k}{Number of folds. Defaults to 10.}
 
 \item{seed}{Integer seed for reproducible fold assignment. Defaults to 1.}
+
+\item{model_func}{Model-fitting function with signature
+\code{function(formula, data)}. Required for non-\code{lm} models;
+pass the same function you use as \code{model_func} in \code{mine()}.
+When \code{NULL} (default), only plain \code{lm} models are supported
+(using a fast \code{lm.fit()} path).}
 }
 \value{
 A function with signature \code{function(model)} returning a single
@@ -27,6 +33,19 @@ The data and formula are extracted from the fitted model via
 required. This works correctly when every variable referenced inside
 \code{I()} expressions also appears as a direct term in the formula -- which
 is the normal case when \code{modelminer} builds formulas incrementally.
+
+For plain \code{lm} models (the default \code{model_func} in
+\code{mine()}), a fast path using \code{lm.fit()} on the pre-computed
+design matrix is used -- no \code{model_func} argument needed. For any
+other model type, pass the same \code{model_func} you use in
+\code{mine()} so the closure can refit on each fold.
+
+\strong{Why model_func is needed for non-lm models:}
+\code{mine()} calls \code{model_func(formula, data)} internally.
+The fitted model's stored call records \code{model_func(...)}, but
+\code{model_func} is not in scope when the CV closure runs, so
+\code{update()} cannot re-evaluate it. Passing \code{model_func}
+explicitly avoids this scoping issue.
 
 \strong{Performance note:} each call to the returned function refits the
 model \code{k} times on training folds. For a typical \code{mine()} run

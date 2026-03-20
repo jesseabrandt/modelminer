@@ -248,6 +248,19 @@ lm_loocv <- function(model) {
 #' \code{I()} expressions also appears as a direct term in the formula -- which
 #' is the normal case when \code{modelminer} builds formulas incrementally.
 #'
+#' For plain \code{lm} models (the default \code{model_func} in
+#' \code{mine()}), a fast path using \code{lm.fit()} on the pre-computed
+#' design matrix is used -- no \code{model_func} argument needed. For any
+#' other model type, pass the same \code{model_func} you use in
+#' \code{mine()} so the closure can refit on each fold.
+#'
+#' \strong{Why model_func is needed for non-lm models:}
+#' \code{mine()} calls \code{model_func(formula, data)} internally.
+#' The fitted model's stored call records \code{model_func(...)}, but
+#' \code{model_func} is not in scope when the CV closure runs, so
+#' \code{update()} cannot re-evaluate it. Passing \code{model_func}
+#' explicitly avoids this scoping issue.
+#'
 #' \strong{Performance note:} each call to the returned function refits the
 #' model \code{k} times on training folds. For a typical \code{mine()} run
 #' evaluating hundreds of candidate models, this is substantially slower than
@@ -256,6 +269,11 @@ lm_loocv <- function(model) {
 #'
 #' @param k Number of folds. Defaults to 10.
 #' @param seed Integer seed for reproducible fold assignment. Defaults to 1.
+#' @param model_func Model-fitting function with signature
+#'   \code{function(formula, data)}. Required for non-\code{lm} models;
+#'   pass the same function you use as \code{model_func} in \code{mine()}.
+#'   When \code{NULL} (default), only plain \code{lm} models are supported
+#'   (using a fast \code{lm.fit()} path).
 #' @returns A function with signature \code{function(model)} returning a single
 #'   numeric value (mean squared CV error), lower-is-better. Compatible with
 #'   \code{mine()}'s default \code{metric_comparison = min}.
@@ -266,30 +284,31 @@ lm_loocv <- function(model) {
 #' cv10 <- make_cv_metric(k = 10)
 #' result <- mine(mtcars, mpg, metric = cv10)
 #' result$Formula
-make_cv_metric <- function(k = 10, seed = 1L) {
+make_cv_metric <- function(k = 10, seed = 1L, model_func = NULL) {
   force(k)
   force(seed)
+  force(model_func)
 
   function(model) {
-    if (!inherits(model, "lm") || inherits(model, "glm")) {
-      stop("make_cv_metric() uses lm.fit internally and only works with ",
-           "ordinary least-squares (lm) models. Got class: '",
-           paste(class(model), collapse = "/"), "'. ",
-           "For other model types, write a custom CV metric function.",
-           call. = FALSE)
-    }
-    # Use model.matrix() rather than re-evaluating the formula on fold subsets.
-    # Formula re-evaluation fails when a predictor appears only inside an
-    # interaction (e.g. cyl:wt with no standalone wt term) because the
-    # model frame subset won't contain the raw variable. Slicing the
-    # pre-computed design matrix sidesteps that entirely.
-    X <- model.matrix(model)
-    y <- model.response(model.frame(model))
-    n <- length(y)
+    mf  <- model.frame(model)
+    y   <- model.response(mf)
+    n   <- length(y)
 
     if (k > n) {
       stop("make_cv_metric: k (", k, ") exceeds n (", n, "). ",
            "Use k <= n, or lm_loocv for leave-one-out.", call. = FALSE)
+    }
+
+    # Fast path for plain lm when no model_func supplied.
+    use_fast <- is.null(model_func) &&
+                inherits(model, "lm") && !inherits(model, "glm")
+
+    if (is.null(model_func) && !use_fast) {
+      stop("make_cv_metric() needs model_func for non-lm models. Got class: '",
+           paste(class(model), collapse = "/"), "'. ",
+           "Pass the same model_func you use in mine(), e.g. ",
+           "make_cv_metric(k = ", k, ", model_func = glm).",
+           call. = FALSE)
     }
 
     # Save and restore RNG state so callers' randomness is not affected.
@@ -306,21 +325,44 @@ make_cv_metric <- function(k = 10, seed = 1L) {
     set.seed(seed)
     folds <- sample(rep_len(seq_len(k), n))
 
-    fold_mse <- vapply(seq_len(k), function(i) {
-      X_train <- X[folds != i, , drop = FALSE]
-      X_test  <- X[folds == i, , drop = FALSE]
-      y_train <- y[folds != i]
-      y_test  <- y[folds == i]
+    if (use_fast) {
+      # Fast path: pre-computed design matrix + lm.fit (no formula re-parsing)
+      X <- model.matrix(model)
+      fold_mse <- vapply(seq_len(k), function(i) {
+        X_train <- X[folds != i, , drop = FALSE]
+        X_test  <- X[folds == i, , drop = FALSE]
+        y_train <- y[folds != i]
+        y_test  <- y[folds == i]
 
-      fit <- tryCatch(lm.fit(X_train, y_train), error = function(e) NULL)
-      if (is.null(fit)) return(NA_real_)
+        fit <- tryCatch(lm.fit(X_train, y_train), error = function(e) NULL)
+        if (is.null(fit)) return(NA_real_)
 
-      coefs <- fit$coefficients
-      if (anyNA(coefs)) return(NA_real_)  # rank-deficient fold
+        coefs <- fit$coefficients
+        if (anyNA(coefs)) return(NA_real_)  # rank-deficient fold
 
-      pred <- drop(X_test %*% coefs)
-      mean((y_test - pred)^2)
-    }, numeric(1))
+        pred <- drop(X_test %*% coefs)
+        mean((y_test - pred)^2)
+      }, numeric(1))
+    } else {
+      # Generic path: refit with model_func, predict with predict()
+      frm <- formula(model)
+      fold_mse <- vapply(seq_len(k), function(i) {
+        train_data <- mf[folds != i, , drop = FALSE]
+        test_data  <- mf[folds == i, , drop = FALSE]
+        y_test     <- y[folds == i]
+
+        fit <- tryCatch(model_func(frm, data = train_data),
+                        error = function(e) NULL)
+        if (is.null(fit)) return(NA_real_)
+
+        pred <- tryCatch(predict(fit, newdata = test_data),
+                         error = function(e) NULL)
+        if (is.null(pred)) return(NA_real_)
+
+        pred <- as.numeric(pred)
+        mean((y_test - pred)^2)
+      }, numeric(1))
+    }
 
     mean(fold_mse, na.rm = TRUE)
   }

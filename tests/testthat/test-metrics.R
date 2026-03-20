@@ -244,10 +244,19 @@ test_that("lm_loocv works on plain lm", {
 
 # make_cv_metric class guards ------------------------------------------------
 
-test_that("make_cv_metric errors on glm models", {
+test_that("make_cv_metric errors on glm without model_func", {
   cv5 <- make_cv_metric(k = 5)
   m <- glm(am ~ wt + hp, data = mtcars, family = binomial)
-  expect_error(cv5(m), "only works with.*lm")
+  expect_error(cv5(m), "needs model_func")
+})
+
+test_that("make_cv_metric works on glm with model_func", {
+  glm_func <- function(formula, data) glm(formula, data = data, family = binomial)
+  cv5 <- make_cv_metric(k = 5, model_func = glm_func)
+  m <- glm_func(am ~ wt + hp, data = mtcars)
+  result <- cv5(m)
+  expect_true(is.numeric(result))
+  expect_true(is.finite(result))
 })
 
 test_that("make_cv_metric works on plain lm", {
