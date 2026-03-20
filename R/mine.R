@@ -307,21 +307,75 @@ mine <- function(data, response_var, model_func = lm,
 
   # ---- Dispatch to search algorithm ----
 
-  # Warn about ignored ... for non-lasso methods
-  dots <- list(...)
-  if (length(dots) > 0 && !is.function(method) &&
-      !method %in% c("lasso", "lasso_path")) {
-    dot_names <- if (is.null(names(dots))) "(unnamed)" else paste(names(dots), collapse = ", ")
-    warning("Extra arguments (", dot_names,
-            ") are ignored for method = '", method, "'. ",
-            "Only 'lasso' and 'lasso_path' forward ... to glmnet.",
-            call. = FALSE)
+  # ---- Argument-method compatibility warnings ----
+  # Warn when user-supplied arguments are ignored or underutilised by the
+  # chosen method.  Each check fires only when the argument differs from its
+  # default, so users who rely on defaults see no noise.
+
+  if (!is.function(method)) {
+
+    # ... args: only lasso/lasso_path forward them to glmnet
+    dots <- list(...)
+    if (length(dots) > 0 && !method %in% c("lasso", "lasso_path")) {
+      dot_names <- if (is.null(names(dots))) "(unnamed)" else paste(names(dots), collapse = ", ")
+      warning("Extra arguments (", dot_names,
+              ") are ignored for method = '", method, "'. ",
+              "Only 'lasso' and 'lasso_path' forward ... to glmnet.",
+              call. = FALSE)
+    }
+
+    # metric with lasso: cv.glmnet drives selection, not the user's metric
+    if (identical(method, "lasso") && !identical(metric, AIC)) {
+      warning(
+        "method = 'lasso' uses cv.glmnet's internal CV error for variable ",
+        "selection, not your metric. Your metric is only used to score the ",
+        "final refit. For metric-driven selection, consider ",
+        "method = 'lasso_path'.",
+        call. = FALSE
+      )
+    }
+
+    # metric_comparison with lasso: glmnet always minimises CV error
+    if (identical(method, "lasso") && !identical(metric_comparison, min)) {
+      warning(
+        "method = 'lasso' does not use metric_comparison; cv.glmnet always ",
+        "minimises CV error.",
+        call. = FALSE
+      )
+    }
+
+    # lambda_rule: only used by lasso (lasso_path warns internally too)
+    if (lambda_rule != "lambda.min" &&
+        !method %in% c("lasso", "lasso_path")) {
+      warning(
+        "lambda_rule is only used by method = 'lasso'; ignored for ",
+        "method = '", method, "'.",
+        call. = FALSE
+      )
+    }
+
+    # max_terms: only used by exhaustive
+    if (!is.null(max_terms) && !identical(method, "exhaustive")) {
+      warning(
+        "max_terms is only used by method = 'exhaustive'; ignored for ",
+        "method = '", method, "'.",
+        call. = FALSE
+      )
+    }
+
+    # keep_all_vars with backward: always overridden to TRUE
+    if (identical(method, "backward") && !isTRUE(keep_all_vars)) {
+      warning(
+        "method = 'backward' always starts from all first-order predictors; ",
+        "keep_all_vars = FALSE is overridden.",
+        call. = FALSE
+      )
+    }
   }
 
   candidate_terms <- setdiff(candidate_terms, initial_terms)
 
   # Backward elimination only removes terms from the starting formula; any
-
   # polynomial or interaction candidates that were built are unused.
   if (identical(method, "backward") && length(candidate_terms) > 0) {
     warning(
