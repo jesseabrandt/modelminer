@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## North Star Framework
+
+This project uses a north star framework. Read `north_star.md` and `framework.md` at session start.
+
 ## What This Package Does
 
 `modelminer` is an R package that performs automated model building via configurable stepwise selection. Starting from an intercept-only (or all-first-order) model, it iteratively adds (and optionally removes) terms—from polynomial expansions and interaction terms—that most improve a user-supplied metric (default: AIC).
