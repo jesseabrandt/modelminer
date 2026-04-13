@@ -267,6 +267,7 @@ lm_loocv <- function(model) {
 #' \code{\link{lm_loocv}} or \code{AIC}. Prefer \code{lm_loocv} for
 #' \code{lm}-based searches unless you specifically need k-fold CV.
 #'
+#' @importFrom stats formula predict
 #' @param k Number of folds. Defaults to 10.
 #' @param seed Integer seed for reproducible fold assignment. Defaults to 1.
 #' @param model_func Model-fitting function with signature
@@ -440,7 +441,7 @@ make_cp_metric <- function(full_model) {
 #' @export
 #'
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' m <- rpart::rpart(mpg ~ ., data = mtcars)
 #' list_metrics(m)
 #' }

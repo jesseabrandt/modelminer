@@ -1,3 +1,6 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^CLAUDE\.md$
+^TODO\.md$
+^docs$
+^\.DS_Store$

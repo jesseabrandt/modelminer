@@ -53,8 +53,10 @@ terms and returns the one that optimizes the metric.  A thin wrapper around
 \code{\link{mine}(method = "exhaustive")}.
 }
 \examples{
+\donttest{
 result <- mine_exhaustive(mtcars, mpg, max_terms = 3)
 result$Formula
+}
 }
 \seealso{
 \code{\link{mine}}

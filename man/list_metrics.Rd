@@ -19,7 +19,7 @@ interactive discovery tool before deciding whether the default metric is
 appropriate or whether to write a custom anonymous function instead.
 }
 \examples{
-\dontrun{
+\donttest{
 m <- rpart::rpart(mpg ~ ., data = mtcars)
 list_metrics(m)
 }

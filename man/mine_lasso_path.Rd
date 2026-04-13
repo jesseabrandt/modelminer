@@ -55,7 +55,7 @@ every model where the selected variable set changes.  Produces a richer
 \code{\link{mine}(method = "lasso_path")}.
 }
 \examples{
-\dontrun{
+\donttest{
 result <- mine_lasso_path(mtcars, mpg)
 result$all_models
 }

@@ -25,7 +25,7 @@
 #' @export
 #'
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' # Compare greedy vs forward_backward with different polynomial degrees
 #' cmp <- compare_methods(
 #'   mtcars, mpg,
@@ -38,17 +38,14 @@
 #' )
 #' cmp$summary
 #'
-#' # Use a custom draft search function
-#' my_draft <- function(candidate_terms, current_formula, current_metric,
-#'                      results, model_func, metric, metric_comparison, data) {
-#'   # ... experimental logic ...
-#' }
+#' # Compare with different interaction settings
 #' cmp2 <- compare_methods(
 #'   mtcars, mpg,
 #'   configs = list(
-#'     greedy = list(method = "greedy"),
-#'     draft  = list(method = my_draft)
-#'   )
+#'     no_interact = list(method = "greedy", max_interact_vars = 1),
+#'     interact    = list(method = "greedy", max_interact_vars = 2)
+#'   ),
+#'   max_degree = 1, verbose = FALSE
 #' )
 #' }
 #' @importFrom rlang enexpr as_string
@@ -91,7 +88,7 @@ compare_methods <- function(data, response_var, configs, ...) {
       Config          = nm,
       Formula         = deparse1(r$Formula),
       BestMetric      = if (is.numeric(r$best_metric)) r$best_metric else NA_real_,
-      ModelsEvaluated = nrow(r$all_models),
+      ModelsEvaluated = if (is.null(r$all_models)) 0L else nrow(r$all_models),
       stringsAsFactors = FALSE
     )
   })

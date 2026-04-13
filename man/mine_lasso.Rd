@@ -61,7 +61,7 @@ Requires the \pkg{glmnet} package.  A thin wrapper around
 \code{\link{mine}(method = "lasso")}.
 }
 \examples{
-\dontrun{
+\donttest{
 result <- mine_lasso(mtcars, mpg)
 result$Formula
 

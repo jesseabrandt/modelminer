@@ -27,9 +27,8 @@ Adapts functions that take a predictor matrix \code{x} and response vector
 and \code{data} argument, making them compatible with \code{mine()}.
 }
 \examples{
-\dontrun{
-formula_glmnet <- formula_wrap(glmnet::glmnet)
-result <- mine(mtcars, mpg, model_func = formula_glmnet)
-}
+# Wrap a matrix-based function for use with mine()
+wrap_lm <- formula_wrap(function(x, y, ...) lm.fit(x, y))
+wrap_lm(mpg ~ wt + cyl, data = mtcars)
 
 }

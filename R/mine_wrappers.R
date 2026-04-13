@@ -142,8 +142,10 @@ mine_backward <- function(data, response_var, model_func = lm,
 #' @seealso \code{\link{mine}}
 #'
 #' @examples
+#' \donttest{
 #' result <- mine_exhaustive(mtcars, mpg, max_terms = 3)
 #' result$Formula
+#' }
 #' @importFrom rlang enexpr as_string
 mine_exhaustive <- function(data, response_var, model_func = lm,
                             max_degree = 3, max_interact_vars = 2,
@@ -186,7 +188,7 @@ mine_exhaustive <- function(data, response_var, model_func = lm,
 #'   \code{\link{mine}} for the general dispatcher.
 #'
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' result <- mine_lasso(mtcars, mpg)
 #' result$Formula
 #'
@@ -235,7 +237,7 @@ mine_lasso <- function(data, response_var, model_func = lm,
 #'   \code{\link{mine}} for the general dispatcher.
 #'
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' result <- mine_lasso_path(mtcars, mpg)
 #' result$all_models
 #' }
