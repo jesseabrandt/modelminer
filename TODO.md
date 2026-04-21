@@ -1,5 +1,12 @@
 # modelminer TODO
 
+## License review
+
+`DESCRIPTION` declares `MIT + file LICENSE` and `LICENSE` has the CRAN-required year/copyright stub (Jesse Brandt, Zakaria Zerhouni), but there is no `LICENSE.md` with the full MIT text — so the repo looks unlicensed to casual viewers on Codeberg/GitHub. Before CRAN:
+
+1. Confirm MIT is the right choice (and that Zakaria agrees as co-copyright holder).
+2. Add `LICENSE.md` with full MIT text (`usethis::use_mit_license("Jesse Brandt")` regenerates both files; may need manual edit to keep two copyright holders).
+
 ## Feature: Multiple Imputation Support
 
 ### Background
