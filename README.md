@@ -25,6 +25,8 @@ result$best_metric  # AIC of the best model
 result$model        # fitted model object, ready for summary(), predict(), etc.
 ```
 
+> **Planned:** a formula-based wrapper — something like `miner(y ~ x, data)` — that meets R's standard model contract (returns an S3 object with `predict()`, `summary()`, `print()` methods). Not yet implemented.
+
 ## How It Works
 
 `mine()` builds a candidate pool from:
