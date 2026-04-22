@@ -7,6 +7,12 @@
 1. Confirm MIT is the right choice (and that Zakaria agrees as co-copyright holder).
 2. Add `LICENSE.md` with full MIT text (`usethis::use_mit_license("Jesse Brandt")` regenerates both files; may need manual edit to keep two copyright holders).
 
+## Standards for modeling packages
+
+Find and review external standards for what a well-behaved R modeling package should look like, to guide the "make modelminer a proper modeling package" effort (formula wrapper, `predict()`/`summary()`/`coef()` methods, etc.).
+
+Starting point: <https://tidymodels.github.io/model-implementation-principles/model-predictions.html>. Read through and note which principles apply here — or find a machine-readable version to cite. Look for additional standards beyond this one page.
+
 ## Feature: Formula-based wrapper (standard model contract)
 
 Add a wrapper around `mine()` that meets R's standard modelling contract:
