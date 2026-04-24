@@ -2,5 +2,9 @@
 ^\.Rproj\.user$
 ^CLAUDE\.md$
 ^TODO\.md$
+^north_star\.md$
+^framework\.md$
 ^docs$
 ^\.DS_Store$
+^\.positai$
+^\.claude$

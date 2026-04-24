@@ -13,23 +13,6 @@ Find and review external standards for what a well-behaved R modeling package sh
 
 Starting point: <https://tidymodels.github.io/model-implementation-principles/model-predictions.html>. Read through and note which principles apply here — or find a machine-readable version to cite. Look for additional standards beyond this one page.
 
-## Feature: Formula-based wrapper (standard model contract)
-
-Add a wrapper around `mine()` that meets R's standard modelling contract:
-
-```r
-fit <- miner(mpg ~ ., data = mtcars)   # name tentative
-predict(fit, newdata = ...)
-summary(fit)
-print(fit)
-```
-
-Signature takes `formula + data` (no NSE), passes through to `mine()`, and returns an S3 object carrying the fitted model, selected formula, search trace, and method. `predict()` / `summary()` / `print()` / `coef()` methods delegate to the underlying `$model`.
-
-Rationale: `mine()`'s NSE interface is friendly for interactive use but doesn't compose well with pipelines that already build formulas programmatically. A formula-first wrapper is the standard R contract (`lm`, `glm`, `rpart`, `ranger`, ...) and keeps `mine()`'s signature stable for CRAN.
-
-Name is open — `miner()` is the current suggestion.
-
 ## Feature: Multiple Imputation Support
 
 ### Background
