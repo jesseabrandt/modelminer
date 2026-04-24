@@ -1,0 +1,162 @@
+---
+title: "Working with mine() fit objects"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Working with mine() fit objects}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>"
+)
+```
+
+## Overview
+
+`mine()` is modelminer's single entry point for variable selection. It is an
+S3 generic with two methods, so the same function name supports three
+equivalent call forms:
+
+```{r forms, eval = FALSE}
+mine(mpg ~ ., mtcars)              # formula-first, the standard R contract
+mine(mtcars, mpg)                   # data-first, NSE response
+mtcars |> mine(mpg ~ wt + cyl)     # pipe-friendly, formula in slot 2
+```
+
+All three return the same classed object (`class(fit) == "mine"`), with the
+same fields and the same S3 methods for `print()`, `summary()`, `coef()`,
+`predict()`, `formula()`, and `plot()`.
+
+---
+
+## Install
+
+```r
+# From source (requires the remotes package)
+remotes::install_git("https://github.com/jesseabrandt/modelminer.git")
+```
+
+---
+
+## Fit a model
+
+```{r fit}
+library(modelminer)
+
+fit <- mine(mpg ~ ., data = mtcars,
+            method = "forward_backward",
+            max_degree = 2, max_interact_vars = 2,
+            verbose = FALSE)
+```
+
+`fit` is an S3 object of class `"mine"`:
+
+```{r class}
+class(fit)
+```
+
+## Print
+
+`print()` shows the call, the search method, the selected formula, the final
+metric, and the number of models the search evaluated. The full search trace
+is *not* printed -- it can be hundreds of rows, so it lives in `fit$trace`
+for inspection on demand.
+
+```{r print}
+print(fit)
+```
+
+## Summary
+
+`summary()` returns a `summary.mine` object that combines the modelminer
+metadata with the underlying model's summary. Print it to see both:
+
+```{r summary}
+summary(fit)
+```
+
+The summary object is a list, so individual pieces are accessible
+programmatically:
+
+```{r summary-parts}
+s <- summary(fit)
+s$best_metric
+s$n_models
+```
+
+## Coefficients and predictions
+
+`coef()` and `predict()` delegate to the fitted model:
+
+```{r coef-predict}
+coef(fit)
+
+predict(fit, newdata = mtcars[1:5, ])
+```
+
+## Formula and trace
+
+`formula()` returns the selected formula. The full search trace is in
+`fit$trace`:
+
+```{r formula-trace}
+formula(fit)
+
+head(fit$trace)
+nrow(fit$trace)
+```
+
+## Extracting the underlying model
+
+When you need to hand the fitted model to a function that expects a "real"
+model object, use `extract_model()`:
+
+```{r extract}
+m <- extract_model(fit)
+class(m)
+```
+
+## Restricting the search via the formula
+
+A formula interface lets you scope the search to a subset of predictors
+without first reshaping the data:
+
+```{r restricted}
+fit_small <- mine(mpg ~ wt + cyl + hp, data = mtcars,
+                  method = "forward_backward",
+                  max_degree = 2, max_interact_vars = 2,
+                  verbose = FALSE)
+
+formula(fit_small)
+```
+
+## The data-first shorthand
+
+For interactive work where you already have the data in front of you, the
+data-first form lets you name the response as a bare symbol -- every other
+column in `data` becomes a candidate predictor:
+
+```{r data-first}
+fit_nse <- mine(mtcars, mpg,
+                max_degree = 1, max_interact_vars = 1,
+                verbose = FALSE)
+
+formula(fit_nse)
+```
+
+This is equivalent to `mine(mpg ~ ., mtcars)` and returns the same kind of
+object; use whichever reads more naturally at the call site.
+
+## Legacy field names
+
+If you have existing code that indexed the older `mine()` return value with
+`$Formula` (capital F) or `$all_models`, those accessors still work -- the
+classed `"mine"` object carries both the new and legacy field names:
+
+```{r legacy}
+identical(fit$formula,    fit$Formula)
+identical(fit$trace,      fit$all_models)
+```

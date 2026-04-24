@@ -19,32 +19,37 @@ mine_lasso(
 )
 }
 \arguments{
-\item{data}{A data frame containing the response and predictor variables.}
+\item{data}{A data frame containing the response and predictor variables
+(\code{mine.formula} only).}
 
-\item{response_var}{The name of the response variable (unquoted).}
+\item{response_var}{The name of the response variable, unquoted
+(\code{mine.data.frame} only). May also be a formula, in which case the
+call is forwarded to \code{mine.formula}.}
 
-\item{model_func}{A model function accepting \code{formula} and \code{data} arguments.
-Defaults to \code{lm}.}
+\item{model_func}{A model function accepting \code{formula} and \code{data}
+arguments. Defaults to \code{\link[stats]{lm}}.}
 
 \item{max_degree}{Maximum degree for polynomial terms. Defaults to 3.}
 
-\item{max_interact_vars}{Maximum number of variables in interaction terms. Defaults to 2.}
+\item{max_interact_vars}{Maximum number of variables in interaction terms.
+Defaults to 2.}
 
-\item{metric}{A function to compute the model selection metric. Defaults to \code{AIC}.}
+\item{metric}{A function to compute the model selection metric. Defaults
+to \code{\link[stats]{AIC}}.}
 
-\item{metric_comparison}{A function that compares metric values and returns the preferable one.
-Defaults to \code{min}.}
+\item{metric_comparison}{A function that compares metric values and returns
+the preferable one. Defaults to \code{\link[base]{min}}.}
 
-\item{keep_all_vars}{If \code{TRUE}, starts with all first-order terms in the formula.
-Defaults to \code{FALSE}.}
+\item{keep_all_vars}{If \code{TRUE}, starts with all first-order terms in
+the formula. Defaults to \code{FALSE}.}
 
 \item{lambda_rule}{Which lambda to use for the selected formula:
 \code{"lambda.min"} (default, best CV performance) or \code{"lambda.1se"}
 (sparser, within 1 SE of the minimum).  Both appear in \code{all_models}.}
 
-\item{verbose}{If \code{TRUE} (the default), print progress messages showing
-each model evaluated during the search. Set to \code{FALSE} to suppress
-all iteration output.}
+\item{verbose}{If \code{TRUE} (the default), print progress messages
+showing each model evaluated during the search. Set to \code{FALSE} to
+suppress all iteration output.}
 
 \item{...}{Additional arguments forwarded to
 \code{\link[glmnet]{cv.glmnet}}, e.g.

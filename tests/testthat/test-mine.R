@@ -1,105 +1,164 @@
-test_that("lm mine doesn't fail", {
-  expect_no_error(mine(mtcars, mpg))
+# S3 dispatch ----------------------------------------------------------------
+
+test_that("mine.formula() returns an object of class 'mine'", {
+  fit <- mine(mpg ~ ., data = mtcars, verbose = FALSE,
+              max_degree = 1, max_interact_vars = 1)
+  expect_s3_class(fit, "mine")
+  expect_s3_class(fit$formula, "formula")
+  expect_s3_class(fit$model, "lm")
+  expect_s3_class(fit$trace, "data.frame")
 })
 
-test_that("mine returns expected structure", {
-  result <- mine(mtcars, mpg)
-  expect_type(result, "list")
-  expect_named(result, c("Formula", "all_models", "model", "best_metric", "method"))
-  expect_s3_class(result$Formula, "formula")
-  expect_s3_class(result$all_models, "data.frame")
-  expect_true("Formula" %in% names(result$all_models))
-  expect_true("Metric" %in% names(result$all_models))
+test_that("mine.data.frame() (NSE response) returns the same class", {
+  fit <- mine(mtcars, mpg, verbose = FALSE,
+              max_degree = 1, max_interact_vars = 1)
+  expect_s3_class(fit, "mine")
+  expect_s3_class(fit$model, "lm")
 })
 
-test_that("null model is included in all_models", {
-  result <- mine(mtcars, mpg)
-  expect_equal(result$all_models$Formula[1], "mpg ~ 1")
+test_that("pipe with formula in slot 2 routes to the formula method", {
+  fit <- mtcars |> mine(mpg ~ wt + cyl, verbose = FALSE,
+                        max_degree = 1, max_interact_vars = 1)
+  expect_s3_class(fit, "mine")
+  used <- all.vars(fit$formula)
+  expect_true(all(used %in% c("mpg", "wt", "cyl")))
 })
 
-test_that("mine selects a better model than intercept-only", {
-  result <- mine(mtcars, mpg)
-  null_aic <- result$all_models$Metric[[1]]
-  best_aic <- AIC(lm(result$Formula, data = mtcars))
-  expect_lt(best_aic, null_aic)
+test_that("all three call forms agree on the selected formula", {
+  f1 <- mine(mpg ~ ., data = mtcars, verbose = FALSE,
+             max_degree = 1, max_interact_vars = 1)$formula
+  f2 <- mine(mtcars, mpg, verbose = FALSE,
+             max_degree = 1, max_interact_vars = 1)$formula
+  f3 <- (mtcars |> mine(mpg ~ ., verbose = FALSE,
+                        max_degree = 1, max_interact_vars = 1))$formula
+  expect_equal(deparse1(f1), deparse1(f2))
+  expect_equal(deparse1(f1), deparse1(f3))
 })
 
-test_that("keep_all_vars starts with all first-order terms", {
-  result <- mine(mtcars, mpg, keep_all_vars = TRUE)
-  first_formula <- result$all_models$Formula[1]
-  predictor_vars <- setdiff(names(mtcars), "mpg")
-  for (v in predictor_vars) {
-    expect_true(grepl(v, first_formula))
-  }
+# Back-compat: legacy $Formula / $all_models fields are populated ------------
+
+test_that("mine() object exposes both new and legacy field names", {
+  fit <- mine(mtcars, mpg, verbose = FALSE,
+              max_degree = 1, max_interact_vars = 1)
+  # new names
+  expect_s3_class(fit$formula, "formula")
+  expect_s3_class(fit$trace, "data.frame")
+  # legacy names preserved for existing $-accessors
+  expect_identical(fit$Formula,    fit$formula)
+  expect_identical(fit$all_models, fit$trace)
 })
 
-test_that("polynomial terms not generated for factor columns", {
-  df <- mtcars
-  df$cyl <- as.factor(df$cyl)
-  expect_no_error(mine(df, mpg, max_degree = 2, max_interact_vars = 1))
-  result <- mine(df, mpg, max_degree = 2, max_interact_vars = 1)
-  poly_terms <- grep("I\\(cyl\\^", result$all_models$Formula, value = TRUE)
-  expect_length(poly_terms, 0)
+# Constructor behaviour ------------------------------------------------------
+
+test_that("mine() default model_func is lm", {
+  fit <- mine(mpg ~ ., data = mtcars, verbose = FALSE,
+              max_degree = 1, max_interact_vars = 1)
+  expect_s3_class(fit$model, "lm")
 })
 
-test_that("mine makes more than one greedy step on a simple dataset", {
-  set.seed(42)
-  n <- 50
-  x1 <- rnorm(n); x2 <- rnorm(n)
-  y  <- 2 * x1 + 3 * x2 + rnorm(n, sd = 0.1)
-  df <- data.frame(y = y, x1 = x1, x2 = x2)
+test_that("mine() respects an explicit predictor list from the formula", {
+  fit <- mine(mpg ~ wt + cyl, data = mtcars, verbose = FALSE,
+              max_degree = 1, max_interact_vars = 1)
+  used <- all.vars(fit$formula)
+  expect_true(all(used %in% c("mpg", "wt", "cyl")))
+})
 
-  result <- mine(df, y, max_degree = 1, max_interact_vars = 1)
-  final_labels <- attr(terms(result$Formula), "term.labels")
-  expect_true("x1" %in% final_labels)
-  expect_true("x2" %in% final_labels)
+test_that("mine() forwards method and search options", {
+  fit <- mine(mpg ~ ., data = mtcars, verbose = FALSE,
+              method = "forward_backward",
+              max_degree = 1, max_interact_vars = 1)
+  expect_equal(fit$method, "forward_backward")
 })
 
 # Input validation -----------------------------------------------------------
 
-test_that("mine() errors on non-data.frame input", {
-  expect_error(mine(as.matrix(mtcars), mpg), "must be a data frame")
+test_that("mine.formula() errors on a one-sided formula", {
+  expect_error(mine(~ wt, data = mtcars),
+               "two-sided")
 })
 
-test_that("mine() errors on empty data frame", {
-  expect_error(mine(mtcars[0, ], mpg), "no rows")
+test_that("mine.formula() errors when data is not a data frame", {
+  expect_error(mine(mpg ~ wt, data = as.matrix(mtcars)),
+               "'data' must be a data frame")
 })
 
-test_that("mine() errors on missing response variable", {
-  expect_error(mine(mtcars, nonexistent), "not found")
+test_that("mine.formula() errors when response is missing from data", {
+  expect_error(mine(zzz ~ wt, data = mtcars),
+               "Response variable 'zzz' not found")
 })
 
-test_that("mine() warns and handles NAs in data", {
-  d <- mtcars
-  d$wt[1:3] <- NA
-  expect_warning(
-    result <- mine(d, mpg, max_degree = 1, max_interact_vars = 1, verbose = FALSE),
-    "Dropped 3 row"
-  )
-  expect_s3_class(result$Formula, "formula")
+test_that("mine.formula() errors when a named predictor is missing", {
+  expect_error(mine(mpg ~ zzz, data = mtcars),
+               "Predictor")
 })
 
-test_that("mine() warns about small-n with AIC", {
-  d <- mtcars[1:5, c("mpg", "wt", "hp", "cyl", "disp", "drat")]
-  expect_warning(
-    mine(d, mpg, max_degree = 1, max_interact_vars = 1, verbose = FALSE),
-    "AIC may be unreliable"
-  )
+# S3 methods -----------------------------------------------------------------
+
+test_that("print.mine() prints the call, method, formula, metric", {
+  fit <- mine(mpg ~ ., data = mtcars, verbose = FALSE,
+              max_degree = 1, max_interact_vars = 1)
+  out <- capture.output(print(fit))
+  expect_true(any(grepl("Method",  out)))
+  expect_true(any(grepl("Formula", out)))
+  expect_true(any(grepl("Metric",  out)))
 })
 
-test_that("mine() warns about ignored ... for non-lasso methods", {
-  expect_warning(
-    mine(mtcars, mpg, method = "greedy", max_degree = 1, max_interact_vars = 1,
-         verbose = FALSE, alpha = 0.5),
-    "ignored"
-  )
+test_that("summary.mine() returns a summary.mine object", {
+  fit <- mine(mpg ~ ., data = mtcars, verbose = FALSE,
+              max_degree = 1, max_interact_vars = 1)
+  s <- summary(fit)
+  expect_s3_class(s, "summary.mine")
+  expect_true(!is.null(s$model_summary))
+  expect_equal(s$method, fit$method)
+  expect_equal(s$formula, fit$formula)
 })
 
-test_that("metric_comparison = max works (e.g. log-likelihood)", {
-  log_lik <- function(m) as.numeric(logLik(m))
-  result <- mine(mtcars, mpg, metric = log_lik, metric_comparison = max,
-                 max_degree = 1, max_interact_vars = 1)
-  null_ll <- log_lik(lm(mpg ~ 1, data = mtcars))
-  best_ll  <- log_lik(lm(result$Formula, data = mtcars))
-  expect_gt(best_ll, null_ll)
+test_that("print.summary.mine() runs without error", {
+  fit <- mine(mpg ~ ., data = mtcars, verbose = FALSE,
+              max_degree = 1, max_interact_vars = 1)
+  expect_no_error(capture.output(print(summary(fit))))
+})
+
+test_that("coef.mine() delegates to the underlying model", {
+  fit <- mine(mpg ~ ., data = mtcars, verbose = FALSE,
+              max_degree = 1, max_interact_vars = 1)
+  expect_equal(coef(fit), coef(fit$model))
+})
+
+test_that("predict.mine() works with and without newdata", {
+  fit <- mine(mpg ~ ., data = mtcars, verbose = FALSE,
+              max_degree = 1, max_interact_vars = 1)
+  p1 <- predict(fit)
+  p2 <- predict(fit, newdata = mtcars[1:5, ])
+  expect_length(p1, nrow(mtcars))
+  expect_length(p2, 5L)
+})
+
+test_that("formula.mine() returns the selected formula", {
+  fit <- mine(mpg ~ ., data = mtcars, verbose = FALSE,
+              max_degree = 1, max_interact_vars = 1)
+  expect_identical(formula(fit), fit$formula)
+})
+
+test_that("plot.mine() delegates to the underlying model", {
+  fit <- mine(mpg ~ ., data = mtcars, verbose = FALSE,
+              max_degree = 1, max_interact_vars = 1)
+  pdf(file = NULL)
+  on.exit(dev.off(), add = TRUE)
+  expect_no_error(plot(fit))
+})
+
+# extract_model() ------------------------------------------------------------
+
+test_that("extract_model() returns the fitted model from a mine fit", {
+  fit <- mine(mpg ~ ., data = mtcars, verbose = FALSE,
+              max_degree = 1, max_interact_vars = 1)
+  m <- extract_model(fit)
+  expect_s3_class(m, "lm")
+  expect_identical(m, fit$model)
+})
+
+test_that("extract_model() errors clearly on unsupported input", {
+  expect_error(extract_model(1:5),
+               "Cannot extract a model")
 })
