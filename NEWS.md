@@ -1,4 +1,4 @@
-# modelminer 0.2.0
+# modelminer 0.1.1
 
 ## Features
 

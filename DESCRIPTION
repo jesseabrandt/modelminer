@@ -1,7 +1,7 @@
 Package: modelminer
 Type: Package
 Title: Automated Model Selection with Feature Engineering
-Version: 0.2.0
+Version: 0.1.1
 Authors@R: c(
     person(
       "Jesse", "Brandt",
