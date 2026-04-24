@@ -26,8 +26,8 @@ Depends: R (>= 4.0.0)
 License: MIT + file LICENSE
 Encoding: UTF-8
 Language: en-US
-URL: https://codeberg.org/jesseabrandt/modelminer
-BugReports: https://codeberg.org/jesseabrandt/modelminer/issues
+URL: https://github.com/jesseabrandt/modelminer, https://codeberg.org/jesseabrandt/modelminer
+BugReports: https://github.com/jesseabrandt/modelminer/issues
 RoxygenNote: 7.3.3
 Imports:
     rlang
