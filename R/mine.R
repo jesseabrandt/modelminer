@@ -160,14 +160,44 @@ mine.formula <- function(x, data, model_func = lm,
                          lambda_rule = "lambda.min", verbose = TRUE, ...) {
 
   call <- match.call()
+  .mine_formula_body(
+    x, data,
+    model_func        = model_func,
+    max_degree        = max_degree,
+    max_interact_vars = max_interact_vars,
+    metric            = metric,
+    metric_comparison = metric_comparison,
+    keep_all_vars     = keep_all_vars,
+    method            = method,
+    max_terms         = max_terms,
+    lambda_rule       = lambda_rule,
+    verbose           = verbose,
+    ...,
+    .call           = call,
+    .data_expr      = call$data,
+    .formula_style  = TRUE
+  )
+}
 
-  if (length(x) != 3L)
+# Shared body for the formula path. Called both by mine.formula directly and
+# by mine.data.frame's pipe branch; the caller supplies its own match.call()
+# so print()/summary() show the user's actual invocation rather than the
+# internal forwarding call.
+.mine_formula_body <- function(formula, data, model_func = lm,
+                               max_degree = 3, max_interact_vars = 2,
+                               metric = AIC, metric_comparison = min,
+                               keep_all_vars = FALSE, method = "greedy",
+                               max_terms = NULL, lambda_rule = "lambda.min",
+                               verbose = TRUE, ...,
+                               .call, .data_expr, .formula_style) {
+
+  if (length(formula) != 3L)
     stop("'formula' must be two-sided (response ~ predictors).",
          call. = FALSE)
   if (!is.data.frame(data))
     stop("'data' must be a data frame.", call. = FALSE)
 
-  response_vars <- all.vars(x[[2L]])
+  response_vars <- all.vars(formula[[2L]])
   if (length(response_vars) != 1L)
     stop("'formula' must have exactly one response variable on the LHS.",
          call. = FALSE)
@@ -179,7 +209,7 @@ mine.formula <- function(x, data, model_func = lm,
 
   # Restrict the candidate pool to the predictors the formula names. A bare
   # `.` is treated as "all other columns in data" -- the default behaviour.
-  rhs_vars <- all.vars(x[[3L]])
+  rhs_vars <- all.vars(formula[[3L]])
   has_dot  <- "." %in% rhs_vars
   if (!has_dot && length(rhs_vars) > 0L) {
     missing_v <- setdiff(rhs_vars, names(data))
@@ -204,7 +234,9 @@ mine.formula <- function(x, data, model_func = lm,
     ...
   )
 
-  .build_mine(result, call)
+  .build_mine(result, .call,
+              data_expr      = .data_expr,
+              formula_style  = .formula_style)
 }
 
 #' @rdname mine
@@ -220,12 +252,13 @@ mine.data.frame <- function(x, response_var, model_func = lm,
   expr <- rlang::enexpr(response_var)
 
   # Pipe-friendly: if response_var is a formula (e.g. `df |> mine(y ~ x)`),
-  # forward to the formula method. as.formula() on an already-parsed `~`
-  # call adds the formula class without running arbitrary code.
+  # delegate to the formula body. We pass this method's own match.call() so
+  # print()/summary() show the user's `mine(data, y ~ x)` invocation instead
+  # of the internal forwarding call.
   if (rlang::is_call(expr) && identical(as.character(expr[[1L]]), "~")) {
     f <- as.formula(expr, env = rlang::caller_env())
-    return(mine.formula(
-      f, data = x,
+    return(.mine_formula_body(
+      f, x,
       model_func        = model_func,
       max_degree        = max_degree,
       max_interact_vars = max_interact_vars,
@@ -236,7 +269,10 @@ mine.data.frame <- function(x, response_var, model_func = lm,
       max_terms         = max_terms,
       lambda_rule       = lambda_rule,
       verbose           = verbose,
-      ...
+      ...,
+      .call           = call,
+      .data_expr      = call$x,
+      .formula_style  = FALSE
     ))
   }
 
@@ -257,13 +293,45 @@ mine.data.frame <- function(x, response_var, model_func = lm,
     ...
   )
 
-  .build_mine(result, call)
+  .build_mine(result, call,
+              data_expr     = call$x,
+              formula_style = FALSE)
 }
 
 # Build the S3 "mine" object from a .mine_impl() result. Both old-style
 # fields ($Formula, $all_models) and new-style fields ($formula, $trace)
 # are populated so code written against either convention keeps working.
-.build_mine <- function(result, call) {
+.build_mine <- function(result, call, data_expr, formula_style) {
+  # Normalise both the outer mine() call and the underlying model's call so
+  # print()/summary() show something the user can recognise as their own
+  # code, not the internals. Without this, the method dispatch leaks into
+  # the outer call as `mine.formula(x = ...)` and the underlying lm stores
+  # `model_func(formula = result$Formula, data = data)` -- uninformative
+  # and identical for every fit.
+  user_call <- call
+  user_call[[1L]] <- quote(mine)
+  nms <- names(user_call)
+  if (length(nms) >= 2L && nzchar(nms[2L]) && nms[2L] == "x") {
+    # mine.formula's first arg is the formula; mine.data.frame's is the data
+    # frame. Either way, the user typed it unlabelled or as a formula -- so
+    # either rename to "formula" or drop the name for a positional display.
+    names(user_call)[2L] <- if (formula_style) "formula" else ""
+  }
+  # For the data-first form, the second slot is `response_var`; the user
+  # typically passes it positionally. Drop the name so it prints cleanly.
+  if (!formula_style && length(nms) >= 3L && nzchar(nms[3L]) &&
+      nms[3L] == "response_var") {
+    names(user_call)[3L] <- ""
+  }
+
+  if (!is.null(result$model) && "call" %in% names(result$model)) {
+    fn_expr <- call$model_func
+    if (is.null(fn_expr)) fn_expr <- quote(lm)
+    result$model$call <- bquote(
+      .(fn_expr)(formula = .(result$Formula), data = .(data_expr))
+    )
+  }
+
   structure(
     list(
       model       = result$model,
@@ -273,7 +341,7 @@ mine.data.frame <- function(x, response_var, model_func = lm,
       best_metric = result$best_metric,
       trace       = result$all_models,
       all_models  = result$all_models,
-      call        = call
+      call        = user_call
     ),
     class = "mine"
   )
