@@ -4,7 +4,7 @@ test_that("exhaustive returns expected structure", {
   result <- mine(df, y, max_degree = 1, max_interact_vars = 1,
                  method = "exhaustive", max_terms = 2)
   expect_type(result, "list")
-  expect_named(result, c("Formula", "all_models", "model", "best_metric", "method"))
+  expect_true(all(c("Formula", "all_models", "model", "best_metric", "method") %in% names(result)))
   expect_s3_class(result$Formula, "formula")
   expect_s3_class(result$all_models, "data.frame")
   expect_equal(result$method, "exhaustive")

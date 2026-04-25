@@ -2,7 +2,7 @@ test_that("backward returns expected structure", {
   result <- mine(mtcars, mpg, max_degree = 1, max_interact_vars = 1,
                  method = "backward")
   expect_type(result, "list")
-  expect_named(result, c("Formula", "all_models", "model", "best_metric", "method"))
+  expect_true(all(c("Formula", "all_models", "model", "best_metric", "method") %in% names(result)))
   expect_s3_class(result$Formula, "formula")
   expect_s3_class(result$all_models, "data.frame")
   expect_equal(result$method, "backward")

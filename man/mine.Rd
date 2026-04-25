@@ -2,10 +2,30 @@
 % Please edit documentation in R/mine.R
 \name{mine}
 \alias{mine}
+\alias{mine.formula}
+\alias{mine.data.frame}
 \title{Automated model selection with feature engineering}
 \usage{
-mine(
+mine(x, ...)
+
+\method{mine}{formula}(
+  x,
   data,
+  model_func = lm,
+  max_degree = 3,
+  max_interact_vars = 2,
+  metric = AIC,
+  metric_comparison = min,
+  keep_all_vars = FALSE,
+  method = "greedy",
+  max_terms = NULL,
+  lambda_rule = "lambda.min",
+  verbose = TRUE,
+  ...
+)
+
+\method{mine}{data.frame}(
+  x,
   response_var,
   model_func = lm,
   max_degree = 3,
@@ -21,94 +41,140 @@ mine(
 )
 }
 \arguments{
-\item{data}{A data frame containing the response and predictor variables.}
-
-\item{response_var}{The name of the response variable (unquoted).}
-
-\item{model_func}{A model function accepting \code{formula} and \code{data} arguments.
-Defaults to \code{lm}.}
-
-\item{max_degree}{Maximum degree for polynomial terms. Defaults to 3.}
-
-\item{max_interact_vars}{Maximum number of variables in interaction terms. Defaults to 2.}
-
-\item{metric}{A function to compute the model selection metric. Defaults to \code{AIC}.}
-
-\item{metric_comparison}{A function that compares metric values and returns the preferable one.
-Defaults to \code{min}.}
-
-\item{keep_all_vars}{If \code{TRUE}, starts with all first-order terms in the formula.
-Defaults to \code{FALSE}.}
-
-\item{method}{Search algorithm to use. One of:
-\itemize{
-  \item \code{"greedy"} (default) -- forward selection, interaction candidates use \code{:}
-  \item \code{"greedy_star"} -- same but interaction candidates use \code{*}, so main effects are always included with their interaction
-  \item \code{"greedy_alt"} -- phased: first-order, polynomial (selected vars), interactions (selected terms)
-  \item \code{"greedy_alt_full"} -- same phases, but phase 3 considers interactions among all predictors
-  \item \code{"greedy_alt_fb"} -- \code{greedy_alt} with forward-backward within each phase
-  \item \code{"greedy_alt_full_fb"} -- \code{greedy_alt_full} with forward-backward within each phase
-  \item \code{"forward_backward"} -- forward-backward over a single pre-built pool
-  \item \code{"backward"} -- pure backward elimination from all predictors
-  \item \code{"exhaustive"} -- best-subset selection up to \code{max_terms} terms
-  \item \code{"lasso"} -- L1-regularised selection via \code{glmnet::cv.glmnet()}
-    over the full candidate pool. Requires the \pkg{glmnet} package.
-    \code{keep_all_vars} affects the starting formula but lasso considers
-    the full candidate pool regardless.
-    Extra arguments in \code{...} are passed to \code{cv.glmnet()}, e.g.
-    \code{alpha} (0 = ridge, 0.5 = elastic net, 1 = lasso), \code{nfolds},
-    \code{family}.
-  \item \code{"lasso_path"} -- walks the full \code{glmnet()} regularization
-    path and records every model at which the selected variable set changes
-    (each variable entry/exit point). Produces a richer \code{all_models}
-    table than \code{"lasso"}. The best formula is whichever optimizes
-    the user's \code{metric}. Requires the \pkg{glmnet} package.
-}
-May also be a custom search function -- see Details.}
-
-\item{max_terms}{Maximum number of terms to include in a subset for the
-exhaustive method. Defaults to 5 if \code{NULL}. Ignored by other methods.}
-
-\item{lambda_rule}{For \code{method = "lasso"}: which lambda to use for the
-selected formula. One of \code{"lambda.min"} (default, best CV performance)
-or \code{"lambda.1se"} (sparser, within 1 SE of the minimum). Both models
-appear in \code{all_models} regardless of this choice. Ignored by other
-methods.}
-
-\item{verbose}{If \code{TRUE} (the default), print progress messages showing
-each model evaluated during the search. Set to \code{FALSE} to suppress
-all iteration output.}
+\item{x}{A two-sided \code{\link[stats]{formula}} (for
+\code{mine.formula}) or a data frame (for \code{mine.data.frame}).}
 
 \item{...}{Additional arguments forwarded to \code{\link[glmnet]{cv.glmnet}}
 (for \code{method = "lasso"}) or \code{\link[glmnet]{glmnet}} (for
 \code{method = "lasso_path"}). Common options include \code{alpha},
-\code{nfolds}, and \code{family}. Ignored for all other built-in methods.}
+\code{nfolds}, and \code{family}. Ignored for all other built-in
+methods.}
+
+\item{data}{A data frame containing the response and predictor variables
+(\code{mine.formula} only).}
+
+\item{model_func}{A model function accepting \code{formula} and \code{data}
+arguments. Defaults to \code{\link[stats]{lm}}.}
+
+\item{max_degree}{Maximum degree for polynomial terms. Defaults to 3.}
+
+\item{max_interact_vars}{Maximum number of variables in interaction terms.
+Defaults to 2.}
+
+\item{metric}{A function to compute the model selection metric. Defaults
+to \code{\link[stats]{AIC}}.}
+
+\item{metric_comparison}{A function that compares metric values and returns
+the preferable one. Defaults to \code{\link[base]{min}}.}
+
+\item{keep_all_vars}{If \code{TRUE}, starts with all first-order terms in
+the formula. Defaults to \code{FALSE}.}
+
+\item{method}{Search algorithm to use. One of:
+\itemize{
+  \item \code{"greedy"} (default) -- forward selection, interaction
+    candidates use \code{:}
+  \item \code{"greedy_star"} -- same but interaction candidates use
+    \code{*}, so main effects are always included with their interaction
+  \item \code{"greedy_alt"} -- phased: first-order, polynomial (selected
+    vars), interactions (selected terms)
+  \item \code{"greedy_alt_full"} -- same phases, but phase 3 considers
+    interactions among all predictors
+  \item \code{"greedy_alt_fb"} -- \code{greedy_alt} with forward-backward
+    within each phase
+  \item \code{"greedy_alt_full_fb"} -- \code{greedy_alt_full} with
+    forward-backward within each phase
+  \item \code{"forward_backward"} -- forward-backward over a single
+    pre-built pool
+  \item \code{"backward"} -- pure backward elimination from all
+    predictors
+  \item \code{"exhaustive"} -- best-subset selection up to
+    \code{max_terms} terms
+  \item \code{"lasso"} -- L1-regularised selection via
+    \code{glmnet::cv.glmnet()} over the full candidate pool. Requires
+    the \pkg{glmnet} package. \code{keep_all_vars} affects the starting
+    formula but lasso considers the full candidate pool regardless.
+    Extra arguments in \code{...} are passed to \code{cv.glmnet()}, e.g.
+    \code{alpha} (0 = ridge, 0.5 = elastic net, 1 = lasso),
+    \code{nfolds}, \code{family}.
+  \item \code{"lasso_path"} -- walks the full \code{glmnet()}
+    regularization path and records every model at which the selected
+    variable set changes (each variable entry/exit point). Produces a
+    richer \code{all_models} table than \code{"lasso"}. The best formula
+    is whichever optimizes the user's \code{metric}. Requires the
+    \pkg{glmnet} package.
+}
+May also be a custom search function -- see Details.}
+
+\item{max_terms}{Maximum number of terms to include in a subset for the
+exhaustive method. Defaults to 5 if \code{NULL}. Ignored by other
+methods.}
+
+\item{lambda_rule}{For \code{method = "lasso"}: which lambda to use for
+the selected formula. One of \code{"lambda.min"} (default, best CV
+performance) or \code{"lambda.1se"} (sparser, within 1 SE of the
+minimum). Both models appear in \code{all_models} regardless of this
+choice. Ignored by other methods.}
+
+\item{verbose}{If \code{TRUE} (the default), print progress messages
+showing each model evaluated during the search. Set to \code{FALSE} to
+suppress all iteration output.}
+
+\item{response_var}{The name of the response variable, unquoted
+(\code{mine.data.frame} only). May also be a formula, in which case the
+call is forwarded to \code{mine.formula}.}
 }
 \value{
-A list with five elements:
+An object of class \code{"mine"}: a list with the following
+  elements (old and new field names are both populated, so existing code
+  that indexes with \code{$Formula} / \code{$all_models} continues to
+  work):
   \describe{
-    \item{\code{Formula}}{The best formula found, as a \code{formula} object.}
-    \item{\code{all_models}}{A data frame of every formula evaluated and its
-      metric value (list column, to support non-numeric metrics).}
-    \item{\code{model}}{The fitted model object for the best formula, ready
-      for \code{summary()}, \code{predict()}, \code{coef()}, etc.}
-    \item{\code{best_metric}}{The metric value for the best formula as a
-      plain numeric scalar.}
-    \item{\code{method}}{The search algorithm used (\code{"greedy"},
-      \code{"greedy_star"}, \code{"greedy_alt"}, \code{"greedy_alt_full"},
-      \code{"greedy_alt_fb"}, \code{"greedy_alt_full_fb"},
-      \code{"forward_backward"}, \code{"backward"}, \code{"exhaustive"},
-      \code{"lasso"}, \code{"lasso_path"}, or \code{"custom"}).}
+    \item{\code{model}}{The fitted model object for the selected formula.}
+    \item{\code{formula}, \code{Formula}}{The selected formula.}
+    \item{\code{trace}, \code{all_models}}{A data frame of every formula
+      evaluated and its metric value.}
+    \item{\code{best_metric}}{The metric value for the selected model as
+      a plain numeric scalar.}
+    \item{\code{method}}{The search algorithm used.}
+    \item{\code{call}}{The matched call to \code{mine()}.}
   }
+  S3 methods are provided for \code{\link[base]{print}},
+  \code{\link[base]{summary}}, \code{\link[stats]{coef}},
+  \code{\link[stats]{predict}}, \code{\link[stats]{formula}}, and
+  \code{\link[graphics]{plot}}.
 }
 \description{
-Starting from an intercept-only (or all-first-order) model, iteratively adds
-and optionally removes terms -- polynomial expansions, interactions, and
-first-order predictors -- that most improve a user-supplied metric. Multiple
-search strategies are available, from greedy forward selection to
+Starting from an intercept-only (or all-first-order) model, iteratively
+adds and optionally removes terms -- polynomial expansions, interactions,
+and first-order predictors -- that most improve a user-supplied metric.
+Multiple search strategies are available, from greedy forward selection to
 L1-regularised lasso.
 }
 \details{
+\code{mine()} is an S3 generic with two methods:
+\describe{
+  \item{\code{mine.formula(formula, data, ...)}}{The primary, formula-first
+    interface -- matches \code{\link[stats]{lm}}, \code{\link[stats]{glm}},
+    and other standard R modelling functions. The formula's right-hand
+    side may be \code{.} ("all other columns in \code{data}") or list
+    specific predictors, in which case only those predictors are
+    considered by the search.}
+  \item{\code{mine.data.frame(data, response_var, ...)}}{A data-first,
+    NSE-friendly entry point. The response is supplied as an unquoted
+    column name and every other column in \code{data} is a candidate
+    predictor. If \code{response_var} is itself a formula (e.g.
+    \code{data |> mine(mpg ~ hp)}) the call is forwarded to the formula
+    method.}
+}
+All three call forms below are equivalent and return the same object:
+\preformatted{
+  mine(mpg ~ ., mtcars)
+  mine(mtcars, mpg)
+  mtcars |> mine(mpg ~ .)
+}
+
+
 When \code{method} is a function it must accept at least these positional
 arguments:
 \preformatted{
@@ -116,14 +182,24 @@ arguments:
            results, model_func, metric, metric_comparison, data, ...)
 }
 Built-in methods may also receive \code{response_str} and other named
-arguments via \code{...}.  A custom function can accept and ignore these
+arguments via \code{...}. A custom function can accept and ignore these
 with a \code{...} catch-all.
 
 The function must return \code{list(Formula, all_models)} matching the
-standard contract.  This lets you pass experimental ("draft") search
+standard contract. This lets you pass experimental ("draft") search
 implementations for comparison via \code{\link{compare_methods}}.
 }
 \examples{
-result <- mine(mtcars, mpg)
-result$Formula
+# Formula-first (standard R modelling contract)
+fit <- mine(mpg ~ ., data = mtcars,
+            max_degree = 1, max_interact_vars = 1)
+print(fit)
+coef(fit)
+
+# Data-first, NSE response (unchanged from older releases)
+mine(mtcars, mpg, max_degree = 1, max_interact_vars = 1)
+
+# Pipe-friendly: formula in slot 2 is auto-routed to mine.formula
+mtcars |> mine(mpg ~ wt + cyl, max_degree = 1, max_interact_vars = 1)
+
 }

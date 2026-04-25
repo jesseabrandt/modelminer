@@ -4,7 +4,7 @@ test_that("greedy_star returns expected structure", {
   result <- mine(mtcars, mpg, method = "greedy_star",
                  max_degree = 1, max_interact_vars = 1, verbose = FALSE)
   expect_type(result, "list")
-  expect_named(result, c("Formula", "all_models", "model", "best_metric", "method"))
+  expect_true(all(c("Formula", "all_models", "model", "best_metric", "method") %in% names(result)))
   expect_s3_class(result$Formula, "formula")
   expect_equal(result$method, "greedy_star")
 })
@@ -29,7 +29,7 @@ test_that("greedy_alt returns expected structure", {
   result <- mine(mtcars, mpg, method = "greedy_alt",
                  max_degree = 1, max_interact_vars = 1, verbose = FALSE)
   expect_type(result, "list")
-  expect_named(result, c("Formula", "all_models", "model", "best_metric", "method"))
+  expect_true(all(c("Formula", "all_models", "model", "best_metric", "method") %in% names(result)))
   expect_s3_class(result$Formula, "formula")
   expect_equal(result$method, "greedy_alt")
 })

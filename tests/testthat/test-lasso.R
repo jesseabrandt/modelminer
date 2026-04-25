@@ -6,7 +6,7 @@ test_that("lasso returns expected structure", {
   result <- mine(df, y, method = "lasso", max_degree = 1, max_interact_vars = 1)
 
   expect_type(result, "list")
-  expect_named(result, c("Formula", "all_models", "model", "best_metric", "method"))
+  expect_true(all(c("Formula", "all_models", "model", "best_metric", "method") %in% names(result)))
   expect_s3_class(result$Formula, "formula")
   expect_s3_class(result$all_models, "data.frame")
   expect_equal(result$method, "lasso")
@@ -135,7 +135,7 @@ test_that("lasso_path returns expected structure", {
   result <- mine(df, y, method = "lasso_path", max_degree = 1, max_interact_vars = 1)
 
   expect_type(result, "list")
-  expect_named(result, c("Formula", "all_models", "model", "best_metric", "method"))
+  expect_true(all(c("Formula", "all_models", "model", "best_metric", "method") %in% names(result)))
   expect_s3_class(result$Formula, "formula")
   expect_s3_class(result$all_models, "data.frame")
   expect_equal(result$method, "lasso_path")
