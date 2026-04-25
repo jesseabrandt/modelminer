@@ -18,15 +18,26 @@ pkgload::load_all()
 ```r
 library(modelminer)
 
-# Basic usage: greedy forward selection with AIC
-result <- mine(mtcars, mpg)
+# Formula interface -- the standard R modelling contract
+fit <- mine(mpg ~ ., data = mtcars)
 
-result$Formula      # best formula found
-result$best_metric  # AIC of the best model
-result$model        # fitted model object, ready for summary(), predict(), etc.
+print(fit)                          # selected formula, method, best metric
+summary(fit)                        # modelminer metadata + underlying model summary
+predict(fit, newdata = mtcars[1:5, ])
+coef(fit)
 ```
 
-> **Planned:** a formula-based wrapper — something like `miner(y ~ x, data)` — that meets R's standard model contract (returns an S3 object with `predict()`, `summary()`, `print()` methods). Not yet implemented.
+`mine()` is an S3 generic — all three call forms below return the same
+classed object:
+
+```r
+mine(mpg ~ ., mtcars)           # formula-first (standard R contract)
+mine(mtcars, mpg)                # data-first, NSE response
+mtcars |> mine(mpg ~ wt + cyl)  # pipe-friendly, formula in slot 2
+```
+
+See `vignette("mine-fit-object", package = "modelminer")` for the full
+walk-through of the fit object and its methods.
 
 ## How It Works
 
@@ -39,7 +50,9 @@ It then searches this pool using a configurable strategy -- greedy forward selec
 
 ## Search Algorithms
 
-Set `method` to choose the search strategy:
+Set `method` to choose the search strategy. Both call forms
+(`mine(y ~ ., data)` and `mine(data, y)`) work for every method; the
+data-first form is shown below for brevity.
 
 ```r
 # Greedy forward selection (default) -- fast, path-dependent
@@ -83,11 +96,11 @@ Any model function that accepts `formula` and `data` arguments works out of the 
 
 ```r
 # Binomial GLM
-result <- mine(
-  data         = mtcars,
-  response_var = am,
-  model_func   = \(formula, data) glm(formula, data, family = binomial),
-  metric       = AIC
+fit <- mine(
+  am ~ .,
+  data       = mtcars,
+  model_func = \(formula, data) glm(formula, data, family = binomial),
+  metric     = AIC
 )
 ```
 
@@ -99,9 +112,9 @@ library(glmnet)
 # formula_wrap returns a closure that extracts x and y from a data frame
 cv_glmnet <- formula_wrap(glmnet::cv.glmnet)
 
-result <- mine(
+fit <- mine(
+  mpg ~ .,
   data          = mtcars,
-  response_var  = mpg,
   model_func    = cv_glmnet,
   metric        = extract_metric,   # uses min(cvm) for cv.glmnet
   keep_all_vars = TRUE              # cv.glmnet needs at least one predictor
@@ -190,13 +203,24 @@ cmp$details     # named list of full mine() results per config
 
 ## Return Value
 
-`mine()` returns a named list:
+`mine()` returns an S3 object of class `"mine"`. Inspect or use it via:
 
-- `$Formula` -- best formula found, as a `formula` object
-- `$all_models` -- data frame of every formula evaluated and its metric
-- `$model` -- fitted model for the best formula (ready for `summary()`, `predict()`, etc.)
-- `$best_metric` -- numeric metric value for the best formula
+**Methods**
+
+- `print(fit)` / `summary(fit)` -- call, method, selected formula, best metric
+- `coef(fit)`, `predict(fit, newdata = ...)`, `formula(fit)`, `plot(fit)`
+- `extract_model(fit)` -- the underlying fitted model (for downstream code that
+  expects a "real" model object)
+
+**Fields** (new names on the left; legacy names remain populated for
+backward compatibility)
+
+- `$formula` / `$Formula` -- selected formula
+- `$model` -- fitted model for the selected formula
+- `$trace` / `$all_models` -- every formula evaluated and its metric
+- `$best_metric` -- numeric metric value for the selected model
 - `$method` -- search algorithm used (`"greedy"`, `"backward"`, `"custom"`, etc.)
+- `$call` -- the `mine()` call that produced the fit
 
 ## Development
 
