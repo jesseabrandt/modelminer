@@ -57,7 +57,7 @@ suppress all iteration output.}
 \code{nfolds}, \code{family}.}
 }
 \value{
-Same structure as \code{\link{mine}}.
+A \code{"mine"} S3 object; see \code{\link{mine}}.
 }
 \description{
 Uses \code{\link[glmnet]{cv.glmnet}} to fit an L1-penalised model over the
@@ -67,13 +67,14 @@ Requires the \pkg{glmnet} package.  A thin wrapper around
 }
 \examples{
 \donttest{
-result <- mine_lasso(mtcars, mpg)
-result$Formula
+fit <- mine_lasso(mtcars, mpg)
+print(fit)
+formula(fit)
 
 # Multinomial response
-result <- mine_lasso(iris, Species,
-                     model_func = nnet::multinom,
-                     family = "multinomial", trace = FALSE)
+fit <- mine_lasso(iris, Species,
+                  model_func = nnet::multinom,
+                  family = "multinomial", trace = FALSE)
 }
 }
 \seealso{

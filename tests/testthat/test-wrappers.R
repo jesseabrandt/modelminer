@@ -1,13 +1,20 @@
 # Tests for method-specific wrapper functions (mine_greedy, mine_lasso, etc.)
 
-expected_names <- c("Formula", "all_models", "model", "best_metric", "method")
+# Wrappers return classed "mine" objects. Both new and legacy field names are
+# populated so existing code that indexed `$Formula` / `$all_models` keeps
+# working alongside `$formula` / `$trace`.
+legacy_names <- c("Formula", "all_models", "model", "best_metric", "method")
+
+expect_mine_object <- function(result) {
+  expect_s3_class(result, "mine")
+  expect_true(all(legacy_names %in% names(result)))
+}
 
 # -- mine_greedy -----------------------------------------------------------
 
 test_that("mine_greedy returns expected structure and method tag", {
   result <- mine_greedy(mtcars, mpg, verbose = FALSE)
-  expect_type(result, "list")
-  expect_named(result, expected_names)
+  expect_mine_object(result)
   expect_equal(result$method, "greedy")
 })
 
@@ -34,8 +41,7 @@ test_that("mine_greedy rejects invalid variant", {
 test_that("mine_forward_backward returns expected structure", {
   result <- mine_forward_backward(mtcars, mpg, max_degree = 1,
                                   max_interact_vars = 1, verbose = FALSE)
-  expect_type(result, "list")
-  expect_named(result, expected_names)
+  expect_mine_object(result)
   expect_equal(result$method, "forward_backward")
 })
 
@@ -54,8 +60,7 @@ test_that("mine_forward_backward matches mine(method = 'forward_backward')", {
 
 test_that("mine_backward returns expected structure", {
   result <- mine_backward(mtcars, mpg, verbose = FALSE)
-  expect_type(result, "list")
-  expect_named(result, expected_names)
+  expect_mine_object(result)
   expect_equal(result$method, "backward")
 })
 
@@ -71,8 +76,7 @@ test_that("mine_exhaustive returns expected structure", {
   result <- mine_exhaustive(mtcars[, c("mpg", "wt", "cyl", "hp")], mpg,
                             max_terms = 2, max_degree = 1,
                             max_interact_vars = 1, verbose = FALSE)
-  expect_type(result, "list")
-  expect_named(result, expected_names)
+  expect_mine_object(result)
   expect_equal(result$method, "exhaustive")
 })
 
@@ -90,8 +94,7 @@ test_that("mine_lasso returns expected structure", {
   skip_if_not_installed("glmnet")
   result <- mine_lasso(mtcars, mpg, max_degree = 1, max_interact_vars = 1,
                        verbose = FALSE)
-  expect_type(result, "list")
-  expect_named(result, expected_names)
+  expect_mine_object(result)
   expect_equal(result$method, "lasso")
 })
 
@@ -127,8 +130,7 @@ test_that("mine_lasso_path returns expected structure", {
   skip_if_not_installed("glmnet")
   result <- mine_lasso_path(mtcars, mpg, max_degree = 1,
                             max_interact_vars = 1, verbose = FALSE)
-  expect_type(result, "list")
-  expect_named(result, expected_names)
+  expect_mine_object(result)
   expect_equal(result$method, "lasso_path")
 })
 

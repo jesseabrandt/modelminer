@@ -50,7 +50,7 @@ showing each model evaluated during the search. Set to \code{FALSE} to
 suppress all iteration output.}
 }
 \value{
-Same structure as \code{\link{mine}}.
+A \code{"mine"} S3 object; see \code{\link{mine}}.
 }
 \description{
 Evaluates every possible subset of candidate terms up to \code{max_terms}
@@ -59,8 +59,9 @@ terms and returns the one that optimizes the metric.  A thin wrapper around
 }
 \examples{
 \donttest{
-result <- mine_exhaustive(mtcars, mpg, max_terms = 3)
-result$Formula
+fit <- mine_exhaustive(mtcars, mpg, max_terms = 3)
+print(fit)
+formula(fit)
 }
 }
 \seealso{

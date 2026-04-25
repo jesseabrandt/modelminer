@@ -20,12 +20,16 @@ knitr::opts_chunk$set(
 removing polynomial expansions and interaction terms -- that most improve a model
 selection metric. You supply a model function, a dataset, and a response
 variable; `mine()` explores the candidate term space and returns the best
-formula it finds.
+formula it finds, packaged as an S3 object with the standard
+`print()`/`summary()`/`predict()`/`coef()` methods.
 
-The default metric is AIC and the default search is greedy forward selection,
-but both are configurable. `mine()` accepts any model function with a
-`formula` and `data` interface, which covers `lm`, `glm`, and anything
-wrapped with `formula_wrap()`.
+`mine()` is an S3 generic with a formula-first method (`mine(y ~ x, data)`)
+and a data-first NSE method (`mine(data, y)`); both return the same kind
+of object. The default metric is AIC and the default search is greedy
+forward selection, but both are configurable. `mine()` accepts any model
+function with a `formula` and `data` interface, which covers `lm`, `glm`,
+and anything wrapped with `formula_wrap()`. See
+`vignette("mine-fit-object")` for a tour of the returned object.
 
 ---
 
@@ -36,21 +40,24 @@ The simplest case — finding predictors of fuel economy in `mtcars`:
 ```{r lm-example, results = "hide"}
 library(modelminer)
 
-lm_result <- mine(mtcars, mpg, max_degree = 2, max_interact_vars = 2, verbose = FALSE)
+lm_fit <- mine(mpg ~ ., data = mtcars,
+               max_degree = 2, max_interact_vars = 2,
+               verbose = FALSE)
 ```
 
 ```{r lm-result}
-lm_result$Formula
+print(lm_fit)
 ```
 
-The `all_models` data frame records every formula evaluated during the search,
-including the metric value at each step. This is useful for inspecting the
-search path, diagnosing whether the algorithm stopped too early, or comparing
-how metric values evolved:
+The `$trace` data frame (also available as `$all_models` for backward
+compatibility) records every formula evaluated during the search, including
+the metric value at each step. This is useful for inspecting the search
+path, diagnosing whether the algorithm stopped too early, or comparing how
+metric values evolved:
 
-```{r lm-all-models}
-head(lm_result$all_models[, "Formula", drop = FALSE])
-nrow(lm_result$all_models)
+```{r lm-trace}
+head(lm_fit$trace[, "Formula", drop = FALSE])
+nrow(lm_fit$trace)
 ```
 
 ---
@@ -66,8 +73,9 @@ Here we search for predictors of transmission type in `mtcars` (`am`: 0 =
 automatic, 1 = manual):
 
 ```{r glm-example, results = "hide", warning = FALSE}
-glm_result <- mine(
-  mtcars, am,
+glm_fit <- mine(
+  am ~ .,
+  data              = mtcars,
   model_func        = \(formula, data) glm(formula, data, family = binomial),
   max_degree        = 1,
   max_interact_vars = 1,
@@ -76,7 +84,7 @@ glm_result <- mine(
 ```
 
 ```{r glm-result}
-glm_result$Formula
+formula(glm_fit)
 ```
 
 Because `glm` returns an object that `AIC()` understands, no change to the
@@ -104,8 +112,9 @@ for the final model:
 # Requires the glmnet package.
 # install.packages("glmnet")
 
-lasso_result <- mine(
-  mtcars, mpg,
+lasso_fit <- mine(
+  mpg ~ .,
+  data              = mtcars,
   method            = "lasso",
   max_degree        = 2,
   max_interact_vars = 2,
@@ -114,8 +123,8 @@ lasso_result <- mine(
 ```
 
 ```{r lasso-result, eval = requireNamespace("glmnet", quietly = TRUE)}
-lasso_result$Formula
-lasso_result$best_metric
+formula(lasso_fit)
+lasso_fit$best_metric
 ```
 
 `method = "lasso_path"` walks the full regularization path and records
@@ -152,8 +161,9 @@ formula_cv_glmnet <- formula_wrap(
 
 # cv.glmnet needs at least one predictor column, so keep_all_vars = TRUE
 # avoids passing an empty matrix for the intercept-only starting model.
-glmnet_result <- mine(
-  mtcars, mpg,
+glmnet_fit <- mine(
+  mpg ~ .,
+  data              = mtcars,
   model_func        = formula_cv_glmnet,
   metric            = \(m) min(m$cvm),   # minimum cross-validated MSE
   metric_comparison = min,
@@ -162,7 +172,7 @@ glmnet_result <- mine(
   max_interact_vars = 1
 )
 
-glmnet_result$Formula
+formula(glmnet_fit)
 ```
 
 `formula_wrap()` assumes the wrapped function uses `x` and `y` as argument

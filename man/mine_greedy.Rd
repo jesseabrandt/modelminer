@@ -62,15 +62,17 @@ showing each model evaluated during the search. Set to \code{FALSE} to
 suppress all iteration output.}
 }
 \value{
-Same structure as \code{\link{mine}}.
+A \code{"mine"} S3 object; see \code{\link{mine}} for fields and
+  methods (\code{print}, \code{summary}, \code{coef}, \code{predict}, ...).
 }
 \description{
 Adds the single best-improving term each round until no candidate improves
 the metric.  A thin wrapper around \code{\link{mine}(method = "greedy")}.
 }
 \examples{
-result <- mine_greedy(mtcars, mpg)
-result$Formula
+fit <- mine_greedy(mtcars, mpg)
+print(fit)
+formula(fit)
 }
 \seealso{
 \code{\link{mine}} for the general dispatcher.

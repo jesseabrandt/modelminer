@@ -25,32 +25,36 @@
 #'       forward-backward within each phase}
 #'   }
 #'
-#' @returns Same structure as \code{\link{mine}}.
+#' @returns A \code{"mine"} S3 object; see \code{\link{mine}} for fields and
+#'   methods (\code{print}, \code{summary}, \code{coef}, \code{predict}, ...).
 #' @export
 #' @seealso \code{\link{mine}} for the general dispatcher.
 #'
 #' @examples
-#' result <- mine_greedy(mtcars, mpg)
-#' result$Formula
+#' fit <- mine_greedy(mtcars, mpg)
+#' print(fit)
+#' formula(fit)
 #' @importFrom rlang enexpr as_string
 mine_greedy <- function(data, response_var, model_func = lm,
                         max_degree = 3, max_interact_vars = 2,
                         metric = AIC, metric_comparison = min,
                         keep_all_vars = FALSE, variant = "greedy",
                         verbose = TRUE) {
+  call <- match.call()
   variant <- match.arg(variant, c("greedy", "greedy_star",
                                    "greedy_alt", "greedy_alt_full",
                                    "greedy_alt_fb", "greedy_alt_full_fb"))
   response_str <- as_string(enexpr(response_var))
-  .mine_impl(data, response_str,
-             model_func        = model_func,
-             max_degree        = max_degree,
-             max_interact_vars = max_interact_vars,
-             metric            = metric,
-             metric_comparison = metric_comparison,
-             keep_all_vars     = keep_all_vars,
-             method            = variant,
-             verbose           = verbose)
+  result <- .mine_impl(data, response_str,
+                       model_func        = model_func,
+                       max_degree        = max_degree,
+                       max_interact_vars = max_interact_vars,
+                       metric            = metric,
+                       metric_comparison = metric_comparison,
+                       keep_all_vars     = keep_all_vars,
+                       method            = variant,
+                       verbose           = verbose)
+  .wrap_mine(result, call)
 }
 
 
@@ -62,28 +66,31 @@ mine_greedy <- function(data, response_var, model_func = lm,
 #'
 #' @inheritParams mine
 #'
-#' @returns Same structure as \code{\link{mine}}.
+#' @returns A \code{"mine"} S3 object; see \code{\link{mine}}.
 #' @export
 #' @seealso \code{\link{mine}}
 #'
 #' @examples
-#' result <- mine_forward_backward(mtcars, mpg)
-#' result$Formula
+#' fit <- mine_forward_backward(mtcars, mpg)
+#' print(fit)
+#' formula(fit)
 #' @importFrom rlang enexpr as_string
 mine_forward_backward <- function(data, response_var, model_func = lm,
                                   max_degree = 3, max_interact_vars = 2,
                                   metric = AIC, metric_comparison = min,
                                   keep_all_vars = FALSE, verbose = TRUE) {
+  call <- match.call()
   response_str <- as_string(enexpr(response_var))
-  .mine_impl(data, response_str,
-             model_func        = model_func,
-             max_degree        = max_degree,
-             max_interact_vars = max_interact_vars,
-             metric            = metric,
-             metric_comparison = metric_comparison,
-             keep_all_vars     = keep_all_vars,
-             method            = "forward_backward",
-             verbose           = verbose)
+  result <- .mine_impl(data, response_str,
+                       model_func        = model_func,
+                       max_degree        = max_degree,
+                       max_interact_vars = max_interact_vars,
+                       metric            = metric,
+                       metric_comparison = metric_comparison,
+                       keep_all_vars     = keep_all_vars,
+                       method            = "forward_backward",
+                       verbose           = verbose)
+  .wrap_mine(result, call)
 }
 
 
@@ -103,27 +110,30 @@ mine_forward_backward <- function(data, response_var, model_func = lm,
 #'   the preferable one.  Defaults to \code{min}.
 #' @param verbose If \code{TRUE} (the default), print progress messages.
 #'
-#' @returns Same structure as \code{\link{mine}}.
+#' @returns A \code{"mine"} S3 object; see \code{\link{mine}}.
 #' @export
 #' @seealso \code{\link{mine}}
 #'
 #' @examples
-#' result <- mine_backward(mtcars, mpg)
-#' result$Formula
+#' fit <- mine_backward(mtcars, mpg)
+#' print(fit)
+#' formula(fit)
 #' @importFrom rlang enexpr as_string
 mine_backward <- function(data, response_var, model_func = lm,
                           metric = AIC, metric_comparison = min,
                           verbose = TRUE) {
+  call <- match.call()
   response_str <- as_string(enexpr(response_var))
-  .mine_impl(data, response_str,
-             model_func        = model_func,
-             max_degree        = 1,
-             max_interact_vars = 1,
-             metric            = metric,
-             metric_comparison = metric_comparison,
-             keep_all_vars     = FALSE,
-             method            = "backward",
-             verbose           = verbose)
+  result <- .mine_impl(data, response_str,
+                       model_func        = model_func,
+                       max_degree        = 1,
+                       max_interact_vars = 1,
+                       metric            = metric,
+                       metric_comparison = metric_comparison,
+                       keep_all_vars     = FALSE,
+                       method            = "backward",
+                       verbose           = verbose)
+  .wrap_mine(result, call)
 }
 
 
@@ -137,14 +147,15 @@ mine_backward <- function(data, response_var, model_func = lm,
 #' @param max_terms Maximum number of terms to include in a subset.
 #'   Defaults to 5.
 #'
-#' @returns Same structure as \code{\link{mine}}.
+#' @returns A \code{"mine"} S3 object; see \code{\link{mine}}.
 #' @export
 #' @seealso \code{\link{mine}}
 #'
 #' @examples
 #' \donttest{
-#' result <- mine_exhaustive(mtcars, mpg, max_terms = 3)
-#' result$Formula
+#' fit <- mine_exhaustive(mtcars, mpg, max_terms = 3)
+#' print(fit)
+#' formula(fit)
 #' }
 #' @importFrom rlang enexpr as_string
 mine_exhaustive <- function(data, response_var, model_func = lm,
@@ -152,17 +163,19 @@ mine_exhaustive <- function(data, response_var, model_func = lm,
                             metric = AIC, metric_comparison = min,
                             keep_all_vars = FALSE, max_terms = 5,
                             verbose = TRUE) {
+  call <- match.call()
   response_str <- as_string(enexpr(response_var))
-  .mine_impl(data, response_str,
-             model_func        = model_func,
-             max_degree        = max_degree,
-             max_interact_vars = max_interact_vars,
-             metric            = metric,
-             metric_comparison = metric_comparison,
-             keep_all_vars     = keep_all_vars,
-             method            = "exhaustive",
-             max_terms         = max_terms,
-             verbose           = verbose)
+  result <- .mine_impl(data, response_str,
+                       model_func        = model_func,
+                       max_degree        = max_degree,
+                       max_interact_vars = max_interact_vars,
+                       metric            = metric,
+                       metric_comparison = metric_comparison,
+                       keep_all_vars     = keep_all_vars,
+                       method            = "exhaustive",
+                       max_terms         = max_terms,
+                       verbose           = verbose)
+  .wrap_mine(result, call)
 }
 
 
@@ -182,20 +195,21 @@ mine_exhaustive <- function(data, response_var, model_func = lm,
 #'   \code{alpha} (0 = ridge, 0.5 = elastic net, 1 = lasso),
 #'   \code{nfolds}, \code{family}.
 #'
-#' @returns Same structure as \code{\link{mine}}.
+#' @returns A \code{"mine"} S3 object; see \code{\link{mine}}.
 #' @export
 #' @seealso \code{\link{mine_lasso_path}} for the full regularization path,
 #'   \code{\link{mine}} for the general dispatcher.
 #'
 #' @examples
 #' \donttest{
-#' result <- mine_lasso(mtcars, mpg)
-#' result$Formula
+#' fit <- mine_lasso(mtcars, mpg)
+#' print(fit)
+#' formula(fit)
 #'
 #' # Multinomial response
-#' result <- mine_lasso(iris, Species,
-#'                      model_func = nnet::multinom,
-#'                      family = "multinomial", trace = FALSE)
+#' fit <- mine_lasso(iris, Species,
+#'                   model_func = nnet::multinom,
+#'                   family = "multinomial", trace = FALSE)
 #' }
 #' @importFrom rlang enexpr as_string
 mine_lasso <- function(data, response_var, model_func = lm,
@@ -204,18 +218,20 @@ mine_lasso <- function(data, response_var, model_func = lm,
                        keep_all_vars = FALSE,
                        lambda_rule = "lambda.min",
                        verbose = TRUE, ...) {
+  call <- match.call()
   response_str <- as_string(enexpr(response_var))
-  .mine_impl(data, response_str,
-             model_func        = model_func,
-             max_degree        = max_degree,
-             max_interact_vars = max_interact_vars,
-             metric            = metric,
-             metric_comparison = metric_comparison,
-             keep_all_vars     = keep_all_vars,
-             method            = "lasso",
-             lambda_rule       = lambda_rule,
-             verbose           = verbose,
-             ...)
+  result <- .mine_impl(data, response_str,
+                       model_func        = model_func,
+                       max_degree        = max_degree,
+                       max_interact_vars = max_interact_vars,
+                       metric            = metric,
+                       metric_comparison = metric_comparison,
+                       keep_all_vars     = keep_all_vars,
+                       method            = "lasso",
+                       lambda_rule       = lambda_rule,
+                       verbose           = verbose,
+                       ...)
+  .wrap_mine(result, call)
 }
 
 
@@ -231,15 +247,19 @@ mine_lasso <- function(data, response_var, model_func = lm,
 #' @param ... Additional arguments forwarded to \code{\link[glmnet]{glmnet}},
 #'   e.g. \code{alpha}, \code{family}.
 #'
-#' @returns Same structure as \code{\link{mine}}.
+#' @returns A \code{"mine"} S3 object; see \code{\link{mine}}. The
+#'   \code{$trace} (a.k.a. \code{$all_models}) data frame is richer than
+#'   \code{\link{mine_lasso}}'s -- one row per change point on the
+#'   regularization path.
 #' @export
 #' @seealso \code{\link{mine_lasso}} for cross-validated selection,
 #'   \code{\link{mine}} for the general dispatcher.
 #'
 #' @examples
 #' \donttest{
-#' result <- mine_lasso_path(mtcars, mpg)
-#' result$all_models
+#' fit <- mine_lasso_path(mtcars, mpg)
+#' print(fit)
+#' head(fit$trace)
 #' }
 #' @importFrom rlang enexpr as_string
 mine_lasso_path <- function(data, response_var, model_func = lm,
@@ -247,15 +267,17 @@ mine_lasso_path <- function(data, response_var, model_func = lm,
                             metric = AIC, metric_comparison = min,
                             keep_all_vars = FALSE,
                             verbose = TRUE, ...) {
+  call <- match.call()
   response_str <- as_string(enexpr(response_var))
-  .mine_impl(data, response_str,
-             model_func        = model_func,
-             max_degree        = max_degree,
-             max_interact_vars = max_interact_vars,
-             metric            = metric,
-             metric_comparison = metric_comparison,
-             keep_all_vars     = keep_all_vars,
-             method            = "lasso_path",
-             verbose           = verbose,
-             ...)
+  result <- .mine_impl(data, response_str,
+                       model_func        = model_func,
+                       max_degree        = max_degree,
+                       max_interact_vars = max_interact_vars,
+                       metric            = metric,
+                       metric_comparison = metric_comparison,
+                       keep_all_vars     = keep_all_vars,
+                       method            = "lasso_path",
+                       verbose           = verbose,
+                       ...)
+  .wrap_mine(result, call)
 }

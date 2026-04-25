@@ -30,7 +30,7 @@ the preferable one.  Defaults to \code{min}.}
 \item{verbose}{If \code{TRUE} (the default), print progress messages.}
 }
 \value{
-Same structure as \code{\link{mine}}.
+A \code{"mine"} S3 object; see \code{\link{mine}}.
 }
 \description{
 Starts from all first-order predictors and removes terms one at a time.
@@ -38,8 +38,9 @@ Polynomial and interaction terms are not considered.  A thin wrapper around
 \code{\link{mine}(method = "backward")}.
 }
 \examples{
-result <- mine_backward(mtcars, mpg)
-result$Formula
+fit <- mine_backward(mtcars, mpg)
+print(fit)
+formula(fit)
 }
 \seealso{
 \code{\link{mine}}

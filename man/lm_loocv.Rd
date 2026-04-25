@@ -22,8 +22,8 @@ Only valid for ordinary least-squares (\code{lm}) models. For other model
 types, or when k-fold CV is preferred, use \code{\link{make_cv_metric}}.
 }
 \examples{
-result <- mine(mtcars, mpg, metric = lm_loocv)
-result$Formula
+fit <- mine(mpg ~ ., data = mtcars, metric = lm_loocv)
+formula(fit)
 }
 \seealso{
 \code{\link{make_cv_metric}}

@@ -89,7 +89,7 @@ tree_result <- mine(
 ```
 
 ```{r tree-result}
-tree_result$Formula
+formula(tree_result)
 tree_result$best_metric
 ```
 
@@ -109,7 +109,7 @@ rpart_result <- mine(
 ```
 
 ```{r rpart-result}
-rpart_result$Formula
+formula(rpart_result)
 rpart_result$best_metric
 ```
 
@@ -130,7 +130,7 @@ rf_result <- mine(
 ```
 
 ```{r rf-result}
-rf_result$Formula
+formula(rf_result)
 rf_result$best_metric
 ```
 
@@ -150,7 +150,7 @@ svm_result <- mine(
 ```
 
 ```{r svm-result}
-svm_result$Formula
+formula(svm_result)
 svm_result$best_metric
 ```
 
@@ -172,14 +172,14 @@ data.frame(
   model   = c("lm (AIC)", "tree (deviance)",
               "rpart (xerror)", "randomForest (OOB MSE)",
               "svm (MSE)"),
-  formula = c(deparse1(lm_result$Formula),    deparse1(tree_result$Formula),
-              deparse1(rpart_result$Formula),  deparse1(rf_result$Formula),
-              deparse1(svm_result$Formula)),
-  n_terms = c(length(attr(terms(lm_result$Formula), "term.labels")),
-              length(attr(terms(tree_result$Formula), "term.labels")),
-              length(attr(terms(rpart_result$Formula), "term.labels")),
-              length(attr(terms(rf_result$Formula), "term.labels")),
-              length(attr(terms(svm_result$Formula), "term.labels")))
+  formula = c(deparse1(formula(lm_result)),    deparse1(formula(tree_result)),
+              deparse1(formula(rpart_result)),  deparse1(formula(rf_result)),
+              deparse1(formula(svm_result))),
+  n_terms = c(length(attr(terms(formula(lm_result)), "term.labels")),
+              length(attr(terms(formula(tree_result)), "term.labels")),
+              length(attr(terms(formula(rpart_result)), "term.labels")),
+              length(attr(terms(formula(rf_result)), "term.labels")),
+              length(attr(terms(formula(svm_result)), "term.labels")))
 )
 ```
 
@@ -278,12 +278,12 @@ data.frame(
   model   = c("lm (AIC)", "tree (deviance)",
               "rpart (xerror)", "randomForest (OOB MSE)",
               "svm (MSE)"),
-  forward_formula  = c(deparse1(fwd_lm$Formula), deparse1(fwd_tree$Formula),
-                       deparse1(fwd_rpart$Formula), deparse1(fwd_rf$Formula),
-                       deparse1(fwd_svm$Formula)),
-  backward_formula = c(deparse1(bwd_lm$Formula), deparse1(bwd_tree$Formula),
-                       deparse1(bwd_rpart$Formula), deparse1(bwd_rf$Formula),
-                       deparse1(bwd_svm$Formula)),
+  forward_formula  = c(deparse1(formula(fwd_lm)), deparse1(formula(fwd_tree)),
+                       deparse1(formula(fwd_rpart)), deparse1(formula(fwd_rf)),
+                       deparse1(formula(fwd_svm))),
+  backward_formula = c(deparse1(formula(bwd_lm)), deparse1(formula(bwd_tree)),
+                       deparse1(formula(bwd_rpart)), deparse1(formula(bwd_rf)),
+                       deparse1(formula(bwd_svm))),
   fwd_metric  = c(fwd_lm$best_metric, fwd_tree$best_metric,
                   fwd_rpart$best_metric, fwd_rf$best_metric,
                   fwd_svm$best_metric),
@@ -337,11 +337,11 @@ data.frame(
             "rpart (xerror)", "randomForest (OOB MSE)",
             "svm (MSE)"),
   selected = c(
-    AIC(lm(sel_lm$Formula, data = mtcars)),
-    deviance(tree(sel_tr$Formula, data = mtcars)),
-    rpart_xerror(rpart(sel_rp$Formula, data = mtcars)),
-    rf_oob_mse(randomForest(sel_rf$Formula, data = mtcars)),
-    svm_mse(svm(sel_sv$Formula, data = mtcars))
+    AIC(lm(formula(sel_lm), data = mtcars)),
+    deviance(tree(formula(sel_tr), data = mtcars)),
+    rpart_xerror(rpart(formula(sel_rp), data = mtcars)),
+    rf_oob_mse(randomForest(formula(sel_rf), data = mtcars)),
+    svm_mse(svm(formula(sel_sv), data = mtcars))
   ),
   full = c(
     AIC(lm(full, data = mtcars)),
@@ -396,9 +396,9 @@ syn_sv <- mine(dat, y, model_func = svm, metric = svm_mse,
 ```{r synthetic-formulas}
 data.frame(
   model   = c("lm", "tree", "rpart", "randomForest", "svm"),
-  formula = c(deparse1(syn_lm$Formula), deparse1(syn_tr$Formula),
-              deparse1(syn_rp$Formula), deparse1(syn_rf$Formula),
-              deparse1(syn_sv$Formula))
+  formula = c(deparse1(formula(syn_lm)), deparse1(formula(syn_tr)),
+              deparse1(formula(syn_rp)), deparse1(formula(syn_rf)),
+              deparse1(formula(syn_sv)))
 )
 ```
 
@@ -413,11 +413,11 @@ data.frame(
             "rpart (xerror)", "randomForest (OOB MSE)",
             "svm (MSE)"),
   selected = c(
-    AIC(lm(syn_lm$Formula, data = dat)),
-    deviance(tree(syn_tr$Formula, data = dat)),
-    rpart_xerror(rpart(syn_rp$Formula, data = dat)),
-    rf_oob_mse(randomForest(syn_rf$Formula, data = dat)),
-    svm_mse(svm(syn_sv$Formula, data = dat))
+    AIC(lm(formula(syn_lm), data = dat)),
+    deviance(tree(formula(syn_tr), data = dat)),
+    rpart_xerror(rpart(formula(syn_rp), data = dat)),
+    rf_oob_mse(randomForest(formula(syn_rf), data = dat)),
+    svm_mse(svm(formula(syn_sv), data = dat))
   ),
   full = c(
     AIC(lm(syn_full, data = dat)),

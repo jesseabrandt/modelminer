@@ -37,8 +37,8 @@ matter -- typically \code{lm(y ~ ., data)}.
 }
 \examples{
 cp <- make_cp_metric(lm(mpg ~ ., data = mtcars))
-result <- mine(mtcars, mpg, metric = cp, max_degree = 1)
-result$Formula
+fit <- mine(mpg ~ ., data = mtcars, metric = cp, max_degree = 1)
+formula(fit)
 
 }
 \seealso{

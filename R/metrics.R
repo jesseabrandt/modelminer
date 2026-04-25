@@ -222,8 +222,8 @@ extract_metric.GBMFit <- function(model, ...) {
 #' @export
 #'
 #' @examples
-#' result <- mine(mtcars, mpg, metric = lm_loocv)
-#' result$Formula
+#' fit <- mine(mpg ~ ., data = mtcars, metric = lm_loocv)
+#' formula(fit)
 lm_loocv <- function(model) {
   if (!inherits(model, "lm") || inherits(model, "glm")) {
     stop("lm_loocv() uses the hat-matrix shortcut and is only valid for ",
@@ -283,8 +283,8 @@ lm_loocv <- function(model) {
 #'
 #' @examples
 #' cv10 <- make_cv_metric(k = 10)
-#' result <- mine(mtcars, mpg, metric = cv10)
-#' result$Formula
+#' fit <- mine(mpg ~ ., data = mtcars, metric = cv10)
+#' formula(fit)
 make_cv_metric <- function(k = 10, seed = 1L, model_func = NULL) {
   force(k)
   force(seed)
@@ -402,8 +402,8 @@ make_cv_metric <- function(k = 10, seed = 1L, model_func = NULL) {
 #'
 #' @examples
 #' cp <- make_cp_metric(lm(mpg ~ ., data = mtcars))
-#' result <- mine(mtcars, mpg, metric = cp, max_degree = 1)
-#' result$Formula
+#' fit <- mine(mpg ~ ., data = mtcars, metric = cp, max_degree = 1)
+#' formula(fit)
 #'
 # TODO(jesse): triple-check the Cp formula against a textbook reference.
 # Verified numerically: Cp(full model) == p_full (exact) on mtcars, and

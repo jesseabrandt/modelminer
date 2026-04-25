@@ -46,7 +46,7 @@ showing each model evaluated during the search. Set to \code{FALSE} to
 suppress all iteration output.}
 }
 \value{
-Same structure as \code{\link{mine}}.
+A \code{"mine"} S3 object; see \code{\link{mine}}.
 }
 \description{
 Each round performs a forward step (add best term) then a backward step
@@ -54,8 +54,9 @@ Each round performs a forward step (add best term) then a backward step
 \code{\link{mine}(method = "forward_backward")}.
 }
 \examples{
-result <- mine_forward_backward(mtcars, mpg)
-result$Formula
+fit <- mine_forward_backward(mtcars, mpg)
+print(fit)
+formula(fit)
 }
 \seealso{
 \code{\link{mine}}

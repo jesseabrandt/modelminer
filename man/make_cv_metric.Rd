@@ -55,8 +55,8 @@ evaluating hundreds of candidate models, this is substantially slower than
 }
 \examples{
 cv10 <- make_cv_metric(k = 10)
-result <- mine(mtcars, mpg, metric = cv10)
-result$Formula
+fit <- mine(mpg ~ ., data = mtcars, metric = cv10)
+formula(fit)
 }
 \seealso{
 \code{\link{lm_loocv}}

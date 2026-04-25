@@ -50,7 +50,10 @@ suppress all iteration output.}
 e.g. \code{alpha}, \code{family}.}
 }
 \value{
-Same structure as \code{\link{mine}}.
+A \code{"mine"} S3 object; see \code{\link{mine}}. The
+  \code{$trace} (a.k.a. \code{$all_models}) data frame is richer than
+  \code{\link{mine_lasso}}'s -- one row per change point on the
+  regularization path.
 }
 \description{
 Walks the full \code{\link[glmnet]{glmnet}} regularization path and records
@@ -61,8 +64,9 @@ every model where the selected variable set changes.  Produces a richer
 }
 \examples{
 \donttest{
-result <- mine_lasso_path(mtcars, mpg)
-result$all_models
+fit <- mine_lasso_path(mtcars, mpg)
+print(fit)
+head(fit$trace)
 }
 }
 \seealso{

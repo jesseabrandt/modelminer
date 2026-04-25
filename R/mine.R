@@ -173,9 +173,8 @@ mine.formula <- function(x, data, model_func = lm,
     lambda_rule       = lambda_rule,
     verbose           = verbose,
     ...,
-    .call           = call,
-    .data_expr      = call$data,
-    .formula_style  = TRUE
+    .call           = .normalize_user_call(call, formula_style = TRUE),
+    .data_expr      = call$data
   )
 }
 
@@ -189,7 +188,7 @@ mine.formula <- function(x, data, model_func = lm,
                                keep_all_vars = FALSE, method = "greedy",
                                max_terms = NULL, lambda_rule = "lambda.min",
                                verbose = TRUE, ...,
-                               .call, .data_expr, .formula_style) {
+                               .call, .data_expr) {
 
   if (length(formula) != 3L)
     stop("'formula' must be two-sided (response ~ predictors).",
@@ -234,9 +233,7 @@ mine.formula <- function(x, data, model_func = lm,
     ...
   )
 
-  .build_mine(result, .call,
-              data_expr      = .data_expr,
-              formula_style  = .formula_style)
+  .build_mine(result, .call, data_expr = .data_expr)
 }
 
 #' @rdname mine
@@ -270,9 +267,8 @@ mine.data.frame <- function(x, response_var, model_func = lm,
       lambda_rule       = lambda_rule,
       verbose           = verbose,
       ...,
-      .call           = call,
-      .data_expr      = call$x,
-      .formula_style  = FALSE
+      .call           = .normalize_user_call(call, formula_style = FALSE),
+      .data_expr      = call$x
     ))
   }
 
@@ -293,37 +289,49 @@ mine.data.frame <- function(x, response_var, model_func = lm,
     ...
   )
 
-  .build_mine(result, call,
-              data_expr     = call$x,
-              formula_style = FALSE)
+  .build_mine(result,
+              .normalize_user_call(call, formula_style = FALSE),
+              data_expr = call$x)
+}
+
+# Rewrite a match.call() from one of mine()'s methods so it looks like the
+# user's `mine(...)` invocation: drop the dispatch suffix, and either
+# relabel or drop the leading argument name so "x =" doesn't leak.
+.normalize_user_call <- function(call, formula_style) {
+  call[[1L]] <- quote(mine)
+  nms <- names(call)
+  if (length(nms) >= 2L && nzchar(nms[2L]) && nms[2L] == "x") {
+    names(call)[2L] <- if (formula_style) "formula" else ""
+  }
+  if (!formula_style && length(nms) >= 3L && nzchar(nms[3L]) &&
+      nms[3L] == "response_var") {
+    names(call)[3L] <- ""
+  }
+  call
+}
+
+# Same idea for the mine_*() wrappers: keep the wrapper name (it identifies
+# the search method) but strip the standard positional argument names so
+# print(fit) shows e.g. `mine_greedy(mtcars, mpg, variant = "greedy_alt")`.
+.normalize_wrapper_call <- function(call) {
+  nms <- names(call)
+  if (length(nms) >= 2L && nzchar(nms[2L]) && nms[2L] == "data") {
+    names(call)[2L] <- ""
+  }
+  if (length(nms) >= 3L && nzchar(nms[3L]) && nms[3L] == "response_var") {
+    names(call)[3L] <- ""
+  }
+  call
 }
 
 # Build the S3 "mine" object from a .mine_impl() result. Both old-style
 # fields ($Formula, $all_models) and new-style fields ($formula, $trace)
 # are populated so code written against either convention keeps working.
-.build_mine <- function(result, call, data_expr, formula_style) {
-  # Normalise both the outer mine() call and the underlying model's call so
-  # print()/summary() show something the user can recognise as their own
-  # code, not the internals. Without this, the method dispatch leaks into
-  # the outer call as `mine.formula(x = ...)` and the underlying lm stores
-  # `model_func(formula = result$Formula, data = data)` -- uninformative
-  # and identical for every fit.
-  user_call <- call
-  user_call[[1L]] <- quote(mine)
-  nms <- names(user_call)
-  if (length(nms) >= 2L && nzchar(nms[2L]) && nms[2L] == "x") {
-    # mine.formula's first arg is the formula; mine.data.frame's is the data
-    # frame. Either way, the user typed it unlabelled or as a formula -- so
-    # either rename to "formula" or drop the name for a positional display.
-    names(user_call)[2L] <- if (formula_style) "formula" else ""
-  }
-  # For the data-first form, the second slot is `response_var`; the user
-  # typically passes it positionally. Drop the name so it prints cleanly.
-  if (!formula_style && length(nms) >= 3L && nzchar(nms[3L]) &&
-      nms[3L] == "response_var") {
-    names(user_call)[3L] <- ""
-  }
-
+# `call` should already be normalized for display; `data_expr` is the
+# user's data argument expression, used to rewrite the underlying model's
+# stored call so `summary(fit)` shows real information instead of the
+# internal `model_func(formula = result$Formula, data = data)` placeholder.
+.build_mine <- function(result, call, data_expr) {
   if (!is.null(result$model) && "call" %in% names(result$model)) {
     fn_expr <- call$model_func
     if (is.null(fn_expr)) fn_expr <- quote(lm)
@@ -341,10 +349,18 @@ mine.data.frame <- function(x, response_var, model_func = lm,
       best_metric = result$best_metric,
       trace       = result$all_models,
       all_models  = result$all_models,
-      call        = user_call
+      call        = call
     ),
     class = "mine"
   )
+}
+
+# Helper for the mine_*() wrappers: build a classed "mine" object from a
+# raw .mine_impl() result, preserving the wrapper's own call shape.
+.wrap_mine <- function(result, raw_call) {
+  .build_mine(result,
+              .normalize_wrapper_call(raw_call),
+              data_expr = raw_call$data)
 }
 
 # Internal workhorse. Accepts response_var as a plain string rather than an
