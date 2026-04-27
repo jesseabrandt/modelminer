@@ -127,11 +127,7 @@
     # Map model.matrix column names back to formula terms.
     selected_terms <- .colnames_to_terms(nonzero_cols, all_terms, data)
 
-    if (length(selected_terms) == 0) {
-      f <- stats::as.formula(paste(response_str, "~ 1"))
-    } else {
-      f <- .build_formula(response_str, selected_terms)
-    }
+    f <- .build_formula(response_str, selected_terms)
 
     # Evaluate with the user's model_func and metric for comparable all_models rows.
     fit <- tryCatch(model_func(f, data = data), error = function(e) NULL)
@@ -274,11 +270,7 @@
     if (key == prev_key) next
     prev_key <- key
 
-    if (length(selected_terms) == 0) {
-      f <- stats::as.formula(paste(response_str, "~ 1"))
-    } else {
-      f <- .build_formula(response_str, selected_terms)
-    }
+    f <- .build_formula(response_str, selected_terms)
 
     # Refit with user's model_func and evaluate with user's metric
     m <- tryCatch(model_func(f, data = data), error = function(e) NULL)
@@ -363,7 +355,7 @@
 
   # Build the full design matrix for all candidate terms so we can read its
   # "assign" attribute.  We use a one-sided formula so no response is needed.
-  full_formula <- stats::as.formula(paste("~", paste(all_terms, collapse = " + ")))
+  full_formula <- stats::reformulate(all_terms)
 
   mf <- tryCatch(
     stats::model.frame(full_formula, data = data, na.action = stats::na.omit),

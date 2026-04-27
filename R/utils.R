@@ -2,9 +2,9 @@
 # An empty terms vector produces response ~ 1 (intercept only).
 .build_formula <- function(response_str, terms) {
   if (length(terms) == 0) {
-    as.formula(paste(response_str, "~ 1"))
+    stats::reformulate("1", response = response_str)
   } else {
-    as.formula(paste(response_str, "~", paste(terms, collapse = " + ")))
+    stats::reformulate(terms, response = response_str)
   }
 }
 

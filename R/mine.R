@@ -456,20 +456,18 @@ mine.data.frame <- function(x, response_var, model_func = lm,
   # ---- Starting formula ----
 
   if (keep_all_vars) {
-    start_formula <- as.formula(paste(response_str, "~",
-                                      paste(predictor_vars, collapse = " + ")))
+    start_formula <- .build_formula(response_str, predictor_vars)
     # forward_backward needs to know which terms are already in the model so
     # it can consider dropping them during backward steps.
     initial_terms <- predictor_vars
   } else {
-    start_formula <- as.formula(paste(response_str, "~ 1"))
+    start_formula <- .build_formula(response_str, character(0))
     initial_terms <- character(0)
   }
 
   # Backward elimination must start from all predictors.
   if (identical(method, "backward") && !keep_all_vars) {
-    start_formula <- as.formula(paste(response_str, "~",
-                                      paste(predictor_vars, collapse = " + ")))
+    start_formula <- .build_formula(response_str, predictor_vars)
     initial_terms <- predictor_vars
   }
 
@@ -515,7 +513,7 @@ mine.data.frame <- function(x, response_var, model_func = lm,
     fallback_formulas <- list()
 
     for (var in predictor_vars) {
-      f <- as.formula(paste(response_str, "~", var))
+      f <- .build_formula(response_str, var)
       m <- tryCatch(model_func(f, data = data), error = function(e) {
         warning("Fallback: could not fit ", deparse1(f), ": ",
                 conditionMessage(e), call. = FALSE)
