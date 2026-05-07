@@ -426,6 +426,110 @@ make_cp_metric <- function(full_model) {
 }
 
 
+# ---- from_slot --------------------------------------------------------------
+
+#' Build a metric function that extracts a slot from a fitted model
+#'
+#' Returns a function suitable for \code{\link{mine}}'s \code{metric}
+#' argument. The returned function pulls \code{model[[slot]]}, optionally
+#' indexes a matrix column, and optionally reduces the result with
+#' \code{reduce} (e.g. \code{min}, \code{max}, \code{mean}).
+#'
+#' This is sugar for the common pattern of writing
+#' \code{metric = \\(m) m$some_slot} or
+#' \code{metric = \\(m) min(m$cvm)} by hand. Anonymous functions remain the
+#' right tool for anything richer than slot / column / reduce -- arithmetic
+#' transforms, multi-slot expressions, index lookups.
+#'
+#' \strong{The final value must be a single number, lower-is-better}
+#' (consistent with \code{mine()}'s default \code{metric_comparison = min}).
+#'
+#' @param slot Character. Name of the list element to extract from the model.
+#' @param column Optional character. For matrix-valued slots, the column to
+#'   extract before reducing.
+#' @param reduce Optional function. Applied to the (column-extracted) value,
+#'   e.g. \code{min}, \code{max}, \code{mean}. If \code{NULL}, the value is
+#'   returned as-is and must already be a single number.
+#' @returns A function with signature \code{function(model)} returning a
+#'   single numeric value. Suitable for \code{mine()}'s \code{metric} arg.
+#' @seealso \code{\link{extract_metric}}, \code{\link{list_metrics}},
+#'   \code{\link{make_cv_metric}}
+#' @export
+#'
+#' @examples
+#' # Plain slot (ranger's OOB prediction error):
+#' \dontrun{
+#' mine(mpg ~ ., data = mtcars,
+#'      model_func = ranger::ranger,
+#'      metric = from_slot("prediction.error"))
+#' }
+#'
+#' # Slot + reduction (cv.glmnet's CV path):
+#' \dontrun{
+#' mine(mpg ~ ., data = mtcars,
+#'      model_func = glmnet::cv.glmnet,
+#'      metric = from_slot("cvm", reduce = min))
+#' }
+#'
+#' # Matrix column + reduction (rpart's CP table):
+#' \dontrun{
+#' mine(mpg ~ ., data = mtcars,
+#'      model_func = rpart::rpart,
+#'      metric = from_slot("cptable", column = "xerror", reduce = min))
+#' }
+from_slot <- function(slot, column = NULL, reduce = NULL) {
+  if (!is.character(slot) || length(slot) != 1L || !nzchar(slot)) {
+    stop("`slot` must be a single non-empty string.", call. = FALSE)
+  }
+  if (!is.null(column) && (!is.character(column) || length(column) != 1L)) {
+    stop("`column` must be NULL or a single string.", call. = FALSE)
+  }
+  if (!is.null(reduce) && !is.function(reduce)) {
+    stop("`reduce` must be NULL or a function.", call. = FALSE)
+  }
+  force(slot); force(column); force(reduce)
+
+  function(model) {
+    val <- model[[slot]]
+    if (is.null(val)) {
+      stop("from_slot('", slot, "'): model has no slot named '", slot, "'. ",
+           "Use list_metrics(model) to see available slots.",
+           call. = FALSE)
+    }
+
+    if (!is.null(column)) {
+      if (!is.matrix(val)) {
+        stop("from_slot(column = '", column, "'): slot '", slot,
+             "' is not a matrix; cannot index a column.",
+             call. = FALSE)
+      }
+      cn <- colnames(val)
+      if (is.null(cn) || !column %in% cn) {
+        stop("from_slot(column = '", column, "'): slot '", slot,
+             "' has no column named '", column, "'. ",
+             "Available: ",
+             if (is.null(cn)) "(none -- matrix has no column names)"
+             else paste(cn, collapse = ", "),
+             ".",
+             call. = FALSE)
+      }
+      val <- val[, column]
+    }
+
+    if (!is.null(reduce)) {
+      val <- reduce(val)
+    }
+
+    if (length(val) != 1L || !is.numeric(val)) {
+      stop("from_slot('", slot, "'): result is not a single number. ",
+           "Pass `reduce = min` (or similar) to reduce a vector-valued slot.",
+           call. = FALSE)
+    }
+    val
+  }
+}
+
+
 # ---- list_metrics -----------------------------------------------------------
 
 #' Inspect available metrics on a fitted model object
