@@ -15,14 +15,13 @@ Order of work (most recent first):
 
 ## 1. Multiple imputation integration
 
-**Status:** Detailed spec already lives in `TODO.md` ("Feature: Multiple
-Imputation Support"). Tier 1 (mean-AIC pooled wrapper) and Tier 2 (D1-based
-selection via mira objects through the existing functional interface) are
-both sketched there.
-
-**Headline question for this branch:** does any of the MI work require
-package changes, or is it all user-side composition on top of the existing
-`model_func` / `metric` / `metric_comparison` hooks?
+**Status:** spec approved 2026-05-07 — see
+[`specs/mi-integration.md`](specs/mi-integration.md). Headline answer to
+"does this require package changes": mostly no. Three named helpers
+(`mm_pool_aic`, `mm_pool_mira`, `mm_d1_gate`) plus one S3 method
+(`mine.mids`) so `data` accepts a `mids` directly. mine() stays
+MI-agnostic; helpers are designed to extract cleanly into a future
+`micemodel` package.
 
 ---
 
