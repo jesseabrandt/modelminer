@@ -1,3 +1,10 @@
+# modelminer 0.2.0
+
+## Features
+
+* New `from_slot()` metric helper for extracting model-embedded fit
+  statistics by slot name (composes with `extract_metric()`).
+
 # modelminer 0.1.1
 
 ## Features
