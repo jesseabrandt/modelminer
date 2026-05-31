@@ -186,6 +186,15 @@ mine_exhaustive <- function(data, response_var, model_func = lm,
 #' Requires the \pkg{glmnet} package.  A thin wrapper around
 #' \code{\link{mine}(method = "lasso")}.
 #'
+#' Unlike the stepwise wrappers, \code{mine_lasso()} takes \strong{no}
+#' \code{metric} or \code{metric_comparison} argument: lasso decides which
+#' terms to keep via the cross-validated penalty (\code{lambda}), not by
+#' optimising a metric.  The selected model is refit with \code{model_func}
+#' (default \code{\link[stats]{lm}}) and returned as \code{$model}, so you can
+#' compute any metric you like from it, e.g. \code{AIC(extract_model(fit))}.
+#' The underlying \code{cv.glmnet} object is returned as \code{$selector_fit}
+#' for inspecting the lambda path and CV-error curve.
+#'
 #' @inheritParams mine
 #' @param lambda_rule Which lambda to use for the selected formula:
 #'   \code{"lambda.min"} (default, best CV performance) or \code{"lambda.1se"}
@@ -195,7 +204,13 @@ mine_exhaustive <- function(data, response_var, model_func = lm,
 #'   \code{alpha} (0 = ridge, 0.5 = elastic net, 1 = lasso),
 #'   \code{nfolds}, \code{family}.
 #'
-#' @returns A \code{"mine"} S3 object; see \code{\link{mine}}.
+#' @returns A \code{"mine"} S3 object; see \code{\link{mine}}. \code{$best_metric}
+#'   is \code{NA} (no metric drives lasso); the \code{Metric} column of
+#'   \code{$trace} holds glmnet's cross-validated error on the lambda rows --
+#'   not a user metric, and its measure depends on \code{family}/\code{type.measure}
+#'   (mean-squared error by default, deviance for binomial/multinomial; see
+#'   \code{$selector_fit$name}). \code{$selector_fit} holds the \code{cv.glmnet}
+#'   object, from which the full lambda path and CV-error curve are recoverable.
 #' @export
 #' @seealso \code{\link{mine_lasso_path}} for the full regularization path,
 #'   \code{\link{mine}} for the general dispatcher.
@@ -205,6 +220,8 @@ mine_exhaustive <- function(data, response_var, model_func = lm,
 #' fit <- mine_lasso(mtcars, mpg)
 #' print(fit)
 #' formula(fit)
+#' AIC(extract_model(fit))   # compute any metric from the refit model
+#' plot(fit$selector_fit)    # the cv.glmnet CV-error curve
 #'
 #' # Multinomial response
 #' fit <- mine_lasso(iris, Species,
@@ -214,7 +231,6 @@ mine_exhaustive <- function(data, response_var, model_func = lm,
 #' @importFrom rlang enexpr as_string
 mine_lasso <- function(data, response_var, model_func = lm,
                        max_degree = 3, max_interact_vars = 2,
-                       metric = AIC, metric_comparison = min,
                        keep_all_vars = FALSE,
                        lambda_rule = "lambda.min",
                        verbose = TRUE, ...) {
@@ -224,8 +240,7 @@ mine_lasso <- function(data, response_var, model_func = lm,
                        model_func        = model_func,
                        max_degree        = max_degree,
                        max_interact_vars = max_interact_vars,
-                       metric            = metric,
-                       metric_comparison = metric_comparison,
+                       metric            = NULL,
                        keep_all_vars     = keep_all_vars,
                        method            = "lasso",
                        lambda_rule       = lambda_rule,
@@ -250,7 +265,9 @@ mine_lasso <- function(data, response_var, model_func = lm,
 #' @returns A \code{"mine"} S3 object; see \code{\link{mine}}. The
 #'   \code{$trace} (a.k.a. \code{$all_models}) data frame is richer than
 #'   \code{\link{mine_lasso}}'s -- one row per change point on the
-#'   regularization path.
+#'   regularization path. \code{$selector_fit} holds the underlying
+#'   \code{glmnet} object. Unlike \code{\link{mine_lasso}}, \code{metric} is
+#'   used here: it picks the best model among the path's change-points.
 #' @export
 #' @seealso \code{\link{mine_lasso}} for cross-validated selection,
 #'   \code{\link{mine}} for the general dispatcher.

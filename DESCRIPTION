@@ -28,7 +28,6 @@ Encoding: UTF-8
 Language: en-US
 URL: https://github.com/jesseabrandt/modelminer, https://codeberg.org/jesseabrandt/modelminer
 BugReports: https://github.com/jesseabrandt/modelminer/issues
-RoxygenNote: 7.3.3
 Imports:
     rlang
 Suggests:
@@ -45,3 +44,4 @@ Suggests:
     gbm
 VignetteBuilder: knitr
 Config/testthat/edition: 3
+Config/roxygen2/version: 8.0.0

@@ -20,9 +20,18 @@
 # whatever model_func the user passed (default lm), giving the standard
 # "lasso-select, OLS-refit" workflow automatically.
 #
-# Returns list(Formula, all_models) matching the mine() contract.
+# `metric` is optional here.  Lasso selects via cross-validated lambda, not a
+# metric, so the dedicated mine_lasso() wrapper passes metric = NULL: in that
+# case the recorded metric is glmnet's own CV error.  The general dispatcher
+# mine(method = "lasso") still defaults metric = AIC and refits to score it,
+# so lasso rows stay comparable with stepwise output.  `metric_comparison` is
+# never used (it arrives via ... and is filtered out before glmnet).
+#
+# Returns list(Formula, all_models, selector_fit) -- selector_fit is the
+# underlying cv.glmnet object, so callers can recover the lambda path, the CV
+# error curve, and plot() it.
 .mine_lasso <- function(candidate_terms, current_formula, current_metric,
-                        results, model_func, metric, metric_comparison,
+                        results, model_func, metric,
                         data, verbose = TRUE, response_str,
                         lambda_rule = "lambda.min", ...) {
 
@@ -45,7 +54,8 @@
   all_terms  <- unique(c(base_terms, candidate_terms))
 
   if (length(all_terms) == 0) {
-    return(list(Formula = current_formula, all_models = results))
+    return(list(Formula = current_formula, all_models = results,
+                selector_fit = NULL))
   }
 
   full_formula <- .build_formula(response_str, all_terms)
@@ -70,7 +80,8 @@
     warning("Lasso requires at least 2 predictor columns in the design matrix. ",
             "Only ", ncol(x), " column(s) found after building candidate pool. ",
             "Returning the starting formula unchanged.", call. = FALSE)
-    return(list(Formula = current_formula, all_models = results))
+    return(list(Formula = current_formula, all_models = results,
+                selector_fit = NULL))
   }
 
   # ---- Fit cv.glmnet ----
@@ -119,6 +130,10 @@
 
   rc <- .results_collector(results)
   formulas_out <- list()
+  # Human-readable name of glmnet's CV measure, e.g. "Mean-Squared Error"
+  # (gaussian) or "Multinomial Deviance" -- it depends on family/type.measure,
+  # so the recorded "CV error" is not always MSE.
+  cv_measure <- unname(cv_fit$name)[1L]
   for (rule in c("lambda.min", "lambda.1se")) {
     lam <- cv_fit[[rule]]
     coefs <- stats::coef(cv_fit, s = lam)
@@ -129,20 +144,35 @@
 
     f <- .build_formula(response_str, selected_terms)
 
-    # Evaluate with the user's model_func and metric for comparable all_models rows.
-    fit <- tryCatch(model_func(f, data = data), error = function(e) NULL)
-    met <- if (!is.null(fit)) {
-      tryCatch(metric(fit), error = function(e) NA_real_)
+    # glmnet's own cross-validated error at this rule -- the quantity lasso
+    # actually minimises.  Read the position straight from cv_fit$index (rows
+    # "min"/"1se") rather than matching lambda by floating-point equality.
+    cv_idx <- cv_fit$index[sub("lambda\\.", "", rule), 1L]
+    cv_error <- if (length(cv_idx) == 1L && !is.na(cv_idx)) {
+      cv_fit$cvm[cv_idx]
     } else {
       NA_real_
     }
 
-    # Also record the CV metric from glmnet for informational purposes.
-    cv_idx <- which(cv_fit$lambda == lam)
-    cv_mse <- if (length(cv_idx) == 1) cv_fit$cvm[cv_idx] else NA_real_
-
-    if (verbose) message("[lasso:", rule, "] Formula: ", deparse1(f),
-            " Metric: ", met, " (CV: ", round(cv_mse, 4), ")")
+    if (is.null(metric)) {
+      # No user metric (the mine_lasso() default): report CV error.  Lasso
+      # selects via lambda, so there is no metric-driven decision to record.
+      met <- cv_error
+      if (verbose) message("[lasso:", rule, "] Formula: ", deparse1(f),
+              " ", cv_measure, ": ", round(cv_error, 4))
+    } else {
+      # A metric was supplied (e.g. via mine(method = "lasso")): refit with the
+      # user's model_func and score it so the row is comparable to other
+      # methods' all_models output.
+      fit <- tryCatch(model_func(f, data = data), error = function(e) NULL)
+      met <- if (!is.null(fit)) {
+        tryCatch(metric(fit), error = function(e) NA_real_)
+      } else {
+        NA_real_
+      }
+      if (verbose) message("[lasso:", rule, "] Formula: ", deparse1(f),
+              " Metric: ", met, " (CV ", cv_measure, ": ", round(cv_error, 4), ")")
+    }
 
     rc$collect(deparse1(f), met)
 
@@ -151,7 +181,7 @@
 
   best_formula <- formulas_out[[lambda_rule]]
 
-  list(Formula = best_formula, all_models = rc$finalize())
+  list(Formula = best_formula, all_models = rc$finalize(), selector_fit = cv_fit)
 }
 
 
@@ -165,9 +195,12 @@
 #
 # Unlike .mine_lasso (which uses cv.glmnet and returns 2 models), this
 # uses the non-CV glmnet() path directly and can return 5-15+ models.
-# The "best" formula is whichever optimizes the user's metric.
+# The "best" formula is whichever optimizes the user's metric -- here the
+# metric IS load-bearing (it picks among the path's change-points), unlike
+# .mine_lasso where lambda alone decides.
 #
-# Returns list(Formula, all_models) matching the mine() contract.
+# Returns list(Formula, all_models, selector_fit) -- selector_fit is the
+# underlying glmnet object.
 .mine_lasso_path <- function(candidate_terms, current_formula, current_metric,
                              results, model_func, metric, metric_comparison,
                              data, verbose = TRUE, response_str,
@@ -190,7 +223,8 @@
   all_terms  <- unique(c(base_terms, candidate_terms))
 
   if (length(all_terms) == 0) {
-    return(list(Formula = current_formula, all_models = results))
+    return(list(Formula = current_formula, all_models = results,
+                selector_fit = NULL))
   }
 
   full_formula <- .build_formula(response_str, all_terms)
@@ -212,7 +246,8 @@
   if (ncol(x) < 2L) {
     warning("Lasso path requires at least 2 predictor columns in the design matrix. ",
             "Returning the starting formula unchanged.", call. = FALSE)
-    return(list(Formula = current_formula, all_models = results))
+    return(list(Formula = current_formula, all_models = results,
+                selector_fit = NULL))
   }
 
   # ---- Fit glmnet (non-CV) ----
@@ -305,7 +340,7 @@
 
   if (verbose) message("Lasso path complete: ", n_path_models, " distinct models evaluated.")
 
-  list(Formula = best_formula, all_models = rc$finalize())
+  list(Formula = best_formula, all_models = rc$finalize(), selector_fit = fit)
 }
 
 
