@@ -135,7 +135,12 @@ An object of class \code{"mine"}: a list with the following
     \item{\code{trace}, \code{all_models}}{A data frame of every formula
       evaluated and its metric value.}
     \item{\code{best_metric}}{The metric value for the selected model as
-      a plain numeric scalar.}
+      a plain numeric scalar. \code{NA} when no metric drives selection
+      (see \code{\link{mine_lasso}}).}
+    \item{\code{selector_fit}}{The underlying selection-engine fit, when the
+      method has one: a \code{cv.glmnet} object for \code{"lasso"}, a
+      \code{glmnet} object for \code{"lasso_path"}. \code{NULL} for stepwise
+      methods.}
     \item{\code{method}}{The search algorithm used.}
     \item{\code{call}}{The matched call to \code{mine()}.}
   }

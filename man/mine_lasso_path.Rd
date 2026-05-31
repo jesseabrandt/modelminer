@@ -53,7 +53,9 @@ e.g. \code{alpha}, \code{family}.}
 A \code{"mine"} S3 object; see \code{\link{mine}}. The
   \code{$trace} (a.k.a. \code{$all_models}) data frame is richer than
   \code{\link{mine_lasso}}'s -- one row per change point on the
-  regularization path.
+  regularization path. \code{$selector_fit} holds the underlying
+  \code{glmnet} object. Unlike \code{\link{mine_lasso}}, \code{metric} is
+  used here: it picks the best model among the path's change-points.
 }
 \description{
 Walks the full \code{\link[glmnet]{glmnet}} regularization path and records

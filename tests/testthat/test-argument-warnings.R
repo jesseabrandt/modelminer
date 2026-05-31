@@ -42,6 +42,26 @@ test_that("metric_comparison with lasso warns", {
   )
 })
 
+test_that("method = 'lasso' does not emit the small-n AIC warning", {
+  skip_if_not_installed("glmnet")
+  # mtcars is 32 obs / 10 predictors (3.2:1), which would normally trigger the
+  # warning -- but for lasso AIC only scores the refit, it doesn't select.
+  expect_no_warning(
+    mine(mtcars, mpg, method = "lasso", max_degree = 1, max_interact_vars = 1,
+         verbose = FALSE)
+  )
+})
+
+test_that("method = 'lasso_path' still emits the small-n AIC warning", {
+  skip_if_not_installed("glmnet")
+  # lasso_path uses AIC to pick among path models, so the warning is apt.
+  expect_warning(
+    mine(mtcars, mpg, method = "lasso_path", max_degree = 1,
+         max_interact_vars = 1, verbose = FALSE),
+    "AIC may be unreliable"
+  )
+})
+
 test_that("lambda_rule with non-lasso method warns", {
   expect_warning(
     suppress_aic_warning(

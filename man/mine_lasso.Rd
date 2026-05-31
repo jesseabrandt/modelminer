@@ -10,8 +10,6 @@ mine_lasso(
   model_func = lm,
   max_degree = 3,
   max_interact_vars = 2,
-  metric = AIC,
-  metric_comparison = min,
   keep_all_vars = FALSE,
   lambda_rule = "lambda.min",
   verbose = TRUE,
@@ -34,12 +32,6 @@ arguments. Defaults to \code{\link[stats]{lm}}.}
 \item{max_interact_vars}{Maximum number of variables in interaction terms.
 Defaults to 2.}
 
-\item{metric}{A function to compute the model selection metric. Defaults
-to \code{\link[stats]{AIC}}.}
-
-\item{metric_comparison}{A function that compares metric values and returns
-the preferable one. Defaults to \code{\link[base]{min}}.}
-
 \item{keep_all_vars}{If \code{TRUE}, starts with all first-order terms in
 the formula. Defaults to \code{FALSE}.}
 
@@ -57,7 +49,13 @@ suppress all iteration output.}
 \code{nfolds}, \code{family}.}
 }
 \value{
-A \code{"mine"} S3 object; see \code{\link{mine}}.
+A \code{"mine"} S3 object; see \code{\link{mine}}. \code{$best_metric}
+  is \code{NA} (no metric drives lasso); the \code{Metric} column of
+  \code{$trace} holds glmnet's cross-validated error on the lambda rows --
+  not a user metric, and its measure depends on \code{family}/\code{type.measure}
+  (mean-squared error by default, deviance for binomial/multinomial; see
+  \code{$selector_fit$name}). \code{$selector_fit} holds the \code{cv.glmnet}
+  object, from which the full lambda path and CV-error curve are recoverable.
 }
 \description{
 Uses \code{\link[glmnet]{cv.glmnet}} to fit an L1-penalised model over the
@@ -65,11 +63,23 @@ full candidate pool, then extracts the selected terms at the chosen lambda.
 Requires the \pkg{glmnet} package.  A thin wrapper around
 \code{\link{mine}(method = "lasso")}.
 }
+\details{
+Unlike the stepwise wrappers, \code{mine_lasso()} takes \strong{no}
+\code{metric} or \code{metric_comparison} argument: lasso decides which
+terms to keep via the cross-validated penalty (\code{lambda}), not by
+optimising a metric.  The selected model is refit with \code{model_func}
+(default \code{\link[stats]{lm}}) and returned as \code{$model}, so you can
+compute any metric you like from it, e.g. \code{AIC(extract_model(fit))}.
+The underlying \code{cv.glmnet} object is returned as \code{$selector_fit}
+for inspecting the lambda path and CV-error curve.
+}
 \examples{
 \donttest{
 fit <- mine_lasso(mtcars, mpg)
 print(fit)
 formula(fit)
+AIC(extract_model(fit))   # compute any metric from the refit model
+plot(fit$selector_fit)    # the cv.glmnet CV-error curve
 
 # Multinomial response
 fit <- mine_lasso(iris, Species,

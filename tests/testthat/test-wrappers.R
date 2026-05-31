@@ -121,7 +121,52 @@ test_that("mine_lasso matches mine(method = 'lasso')", {
   set.seed(42)
   b <- mine_lasso(mtcars, mpg, max_degree = 1, max_interact_vars = 1,
                   verbose = FALSE)
+  # Selection is lambda-driven, so the chosen formula is identical even though
+  # the wrapper supplies no metric.
   expect_equal(deparse1(a$Formula), deparse1(b$Formula))
+})
+
+test_that("mine_lasso takes no metric: best_metric is NA, CV error in trace", {
+  skip_if_not_installed("glmnet")
+  result <- mine_lasso(mtcars, mpg, max_degree = 1, max_interact_vars = 1,
+                       verbose = FALSE)
+  # No metric drives lasso, so best_metric is NA (not a faked AIC/CV value).
+  expect_true(is.na(result$best_metric))
+  # The trace's lambda.min / lambda.1se rows carry glmnet's CV error.
+  expect_s3_class(result$trace, "data.frame")
+  expect_true(any(is.finite(result$trace$Metric)))
+})
+
+test_that("mine_lasso returns the cv.glmnet object as $selector_fit", {
+  skip_if_not_installed("glmnet")
+  result <- mine_lasso(mtcars, mpg, max_degree = 1, max_interact_vars = 1,
+                       verbose = FALSE)
+  expect_s3_class(result$selector_fit, "cv.glmnet")
+  # CV error is recoverable from it -- no need to stuff it into best_metric.
+  expect_true(is.numeric(result$selector_fit$cvm))
+})
+
+test_that("mine_lasso has no metric/metric_comparison arguments", {
+  expect_false("metric" %in% names(formals(mine_lasso)))
+  expect_false("metric_comparison" %in% names(formals(mine_lasso)))
+})
+
+test_that("mine_lasso (metric = NULL) survives the single-predictor fallback", {
+  skip_if_not_installed("glmnet")
+  # A model_func that rejects the intercept-only starting model forces
+  # .mine_impl into its single-predictor fallback. With no metric (the
+  # mine_lasso() default) that branch must not call metric() and crash.
+  needs_predictor <- function(formula, data, ...) {
+    if (length(attr(stats::terms(formula), "term.labels")) == 0L)
+      stop("model requires at least one predictor")
+    lm(formula, data = data, ...)
+  }
+  expect_no_error(
+    result <- mine_lasso(mtcars, mpg, model_func = needs_predictor,
+                         max_degree = 1, max_interact_vars = 1, verbose = FALSE)
+  )
+  expect_s3_class(result$selector_fit, "cv.glmnet")
+  expect_true(is.na(result$best_metric))
 })
 
 # -- mine_lasso_path -------------------------------------------------------
@@ -151,4 +196,13 @@ test_that("mine_lasso_path matches mine(method = 'lasso_path')", {
   b <- mine_lasso_path(mtcars, mpg, max_degree = 1, max_interact_vars = 1,
                        verbose = FALSE)
   expect_equal(deparse1(a$Formula), deparse1(b$Formula))
+})
+
+test_that("mine_lasso_path returns the glmnet object as $selector_fit", {
+  skip_if_not_installed("glmnet")
+  result <- mine_lasso_path(mtcars, mpg, max_degree = 1, max_interact_vars = 1,
+                            verbose = FALSE)
+  expect_s3_class(result$selector_fit, "glmnet")
+  # metric IS load-bearing here, so best_metric remains a real value.
+  expect_true(is.numeric(result$best_metric))
 })
