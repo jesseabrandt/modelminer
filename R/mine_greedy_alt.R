@@ -25,6 +25,7 @@
 # in. This keeps phases independent and avoids phase 2 undoing phase 1.
 #
 # Returns list(Formula, all_models) matching the mine() contract.
+#' @noRd
 .mine_greedy_alt <- function(candidate_terms, current_formula, current_metric,
                               results, model_func, metric, metric_comparison,
                               data, verbose = TRUE, predictor_vars, numeric_vars,
@@ -181,6 +182,7 @@
 # Shared by all forward-only phases of .mine_greedy_alt.
 #
 # Returns list(formula, metric, results).
+#' @noRd
 .greedy_phase <- function(candidates, current_formula, current_metric,
                            results, model_func, metric, metric_comparison, data,
                            verbose = TRUE) {
@@ -244,6 +246,7 @@
 #   re-add it in a different context.
 #
 # Returns list(formula, metric, results, phase_terms).
+#' @noRd
 .greedy_phase_fb <- function(candidates, prior_terms, response_str,
                               current_formula, current_metric,
                               results, model_func, metric, metric_comparison, data,

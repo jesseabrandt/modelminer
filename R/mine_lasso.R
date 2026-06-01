@@ -30,6 +30,7 @@
 # Returns list(Formula, all_models, selector_fit) -- selector_fit is the
 # underlying cv.glmnet object, so callers can recover the lambda path, the CV
 # error curve, and plot() it.
+#' @noRd
 .mine_lasso <- function(candidate_terms, current_formula, current_metric,
                         results, model_func, metric,
                         data, verbose = TRUE, response_str,
@@ -201,6 +202,7 @@
 #
 # Returns list(Formula, all_models, selector_fit) -- selector_fit is the
 # underlying glmnet object.
+#' @noRd
 .mine_lasso_path <- function(candidate_terms, current_formula, current_metric,
                              results, model_func, metric, metric_comparison,
                              data, verbose = TRUE, response_str,
@@ -349,6 +351,7 @@
 # For multinomial family, coef() returns a list of sparse matrices (one per
 # class).  This helper unions nonzero rows across all classes so that a
 # predictor selected for any class is included.
+#' @noRd
 .extract_nonzero_cols <- function(coefs) {
   if (is.list(coefs) && !is.matrix(coefs)) {
     # Multinomial: list of sparse matrices, one per class
@@ -385,6 +388,7 @@
 # "fB:x": startsWith("fB:x", "f") matched the main-effect term "f" before
 # the interaction term "f:x" could be considered, so interaction terms were
 # silently dropped.
+#' @noRd
 .colnames_to_terms <- function(nonzero_cols, all_terms, data) {
   if (length(nonzero_cols) == 0) return(character(0))
 
@@ -425,6 +429,7 @@
 # Check that every response class has >= 2 observations before calling glmnet.
 # glmnet's own error ("one multinomial or binomial class has 1 or 0
 # observations") doesn't say which class, making debugging hard.
+#' @noRd
 .check_class_counts <- function(y, family) {
   if (is.null(family) || !family %in% c("binomial", "multinomial")) return(invisible())
   counts <- table(y)

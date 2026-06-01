@@ -44,11 +44,17 @@
   `lm(formula = mpg ~ wt + cyl, data = mtcars)`).
 * New vignette `mine-fit-object` walks through the three call forms and the
   S3 methods.
+* Requires R (>= 4.1): `mine()`'s pipe form and the documented examples use the
+  base pipe `|>`, introduced in R 4.1.
 
-## Backward compatibility
+## Deprecations
 
-Old field names are preserved: `fit$Formula` and `fit$all_models` still work
-alongside `fit$formula` and `fit$trace`. Existing code requires no changes.
+* The canonical fields on a `"mine"` result are now `$formula` and `$trace`.
+  The legacy names `$Formula` and `$all_models` -- from 0.1.0, when `mine()`
+  returned a plain `list(Formula, all_models)` -- are still populated this
+  release but are **deprecated**: accessing them with `$` emits a one-time
+  warning and they will be removed in a future version. Switch to `$formula`
+  and `$trace`.
 
 # modelminer 0.1.0
 
