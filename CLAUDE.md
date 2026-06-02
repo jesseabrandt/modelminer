@@ -41,7 +41,7 @@ Rscript -e "pkgload::load_all(quiet=TRUE); testthat::test_dir('tests/testthat', 
 1. Builds a candidate term pool: first-order predictors + polynomial terms (`I(var^k)` up to `max_degree`) + interaction terms (all combinations up to `max_interact_vars` variables, using `:` — interaction only, no implicit main effects).
 2. Constructs the starting formula (intercept-only or all first-order terms, per `keep_all_vars`).
 3. Dispatches to the chosen search algorithm based on `method`.
-4. Returns `list(Formula = best_formula, all_models = results_dataframe)`.
+4. Returns an S3 object of class `"mine"` whose canonical fields are `$formula` (the selected formula) and `$trace` (the search results data.frame), alongside `$model`, `$best_metric`, `$method`, and `$call`. The legacy fields `$Formula` and `$all_models` are still populated but **deprecated** as of 0.1.1 (accessing them emits a one-time warning); they will be removed in a future release.
 
 Interaction terms use `:` (not `*`) so each step adds exactly one term. Main effects are included as separate candidates and added by the search algorithm if they improve the metric.
 
@@ -51,7 +51,7 @@ Interaction terms use `:` (not `*`) so each step adds exactly one term. Main eff
 
 - **`R/mine_greedy.R`** — `.mine_greedy()`: greedy forward selection; adds the single best term each round until no improvement.
 - **`R/mine_forward_backward.R`** — `.mine_forward_backward()`: forward step then backward step each round; tracks `added_terms` in `:` notation so formula rebuilds cleanly for removal.
-- **`R/mine_exhaustive.R`** — `.mine_exhaustive()`: stub (not yet implemented).
+- **`R/mine_exhaustive.R`** — `.mine_exhaustive()`: best-subset exhaustive search; evaluates all subsets of candidate terms from size 1 up to `max_terms` and returns the globally best model (not path-dependent). The `max_terms` cap avoids full `2^n` combinatorial explosion.
 
 `method` may also be a custom function with signature `function(candidate_terms, current_formula, current_metric, results, model_func, metric, metric_comparison, data)` for draft/experimental algorithms.
 
