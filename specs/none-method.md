@@ -20,11 +20,14 @@ an **output**.
 
 Add a no-search mode: `mine(..., method = "none")`.
 
-It builds the candidate pool exactly as the search methods do (honouring
-`max_degree`, `max_interact_vars`, and formula scoping), assembles the full
-generated formula, fits it once with `model_func`, and returns — **without
-running any search**. The returned object is a normal `"mine"` object minus the
-parts a no-search run cannot have (the search `$trace`).
+It builds the candidate pool with the same generator the search methods use
+(honouring `max_degree`, `max_interact_vars`, and formula scoping), assembles
+the full generated formula, fits it once with `model_func`, and returns —
+**without running any search**. The returned object is a normal `"mine"` object
+minus the parts a no-search run cannot have (the search `$trace`). The returned
+`$candidate_terms` is the full generated pool; the search path additionally
+filters out terms already in the starting model (`keep_all_vars`), so the two
+match exactly only when `keep_all_vars = FALSE`.
 
 ### Target usage (vignette snippet)
 
@@ -68,19 +71,25 @@ line (there was no search).
 
 1. **`.build_candidate_pool()`** — extract the pool-construction block
    (`R/mine.R:421–454`) into an internal helper taking
-   `(data, predictor_vars, numeric_vars, max_degree, max_interact_vars)` and
-   returning the character vector. Both the search path and the `none` branch
-   call it (DRY).
+   `(predictor_vars, numeric_vars, max_degree, max_interact_vars)` and
+   returning the character vector. (No `data` argument: the pool is built from
+   variable names; `numeric_vars` is derived from `data` by the caller, after
+   NA-row dropping.) Both the search path and the `none` branch call it (DRY).
 2. **`match.arg`** — add `"none"` to the accepted `method` values in
    `.mine_impl()`.
 3. **Branch in `.mine_impl()`** — after the pool is built, if
-   `method == "none"`: build the full formula, fit it once via `model_func`,
-   compute `best_metric` (tolerant `tryCatch`), and early-return a result list
-   carrying `Formula`, `model`, `best_metric`, `candidate_terms`,
-   `all_models = NULL`, `method = "none"`. This short-circuits before the
-   small-`n` AIC selection warning and the argument-compatibility warning block
-   (neither applies to a no-search run). NA-row handling still applies because
-   we fit a model.
+   `method == "none"`: build the full formula, fit it once via
+   `model_func(formula = ., data = .)`, compute `best_metric` (tolerant
+   `tryCatch`), and early-return a result list carrying `Formula`, `model`,
+   `best_metric`, `candidate_terms`, `all_models = NULL`, `method = "none"`.
+   This short-circuits before the starting-model fit and the
+   argument-compatibility warning block. NA-row handling and the small-`n` AIC
+   warning still apply (we fit a real model); additionally, the branch warns
+   when the full generated model is rank-deficient, so `best_metric` (an
+   in-sample saturated-fit metric) is not mistaken for a comparable score.
+   `$candidate_terms` is the complete generated pool, independent of
+   `keep_all_vars` (the search path's internal `setdiff(pool, initial_terms)`
+   is not applied).
 4. **`.build_mine()`** — carry `$candidate_terms` onto the object when present.
 5. **S3 methods** — `print.mine()` / `summary.mine()` branch on
    `method == "none"` for graceful output.

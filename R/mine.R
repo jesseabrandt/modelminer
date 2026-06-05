@@ -137,7 +137,10 @@
 #'     \item{\code{candidate_terms}}{For \code{method = "none"}, the generated
 #'       candidate-term pool as a character vector (e.g.
 #'       \code{c("wt", "I(hp^2)", "wt:cyl")}); the same pool described by
-#'       \code{formula}. \code{NULL} for the searching methods.}
+#'       \code{formula}. This is the complete generated pool -- every term that
+#'       could be considered -- independent of \code{keep_all_vars}. \code{NULL}
+#'       for the searching methods (which build and filter their pool internally
+#'       but do not return it).}
 #'     \item{\code{method}}{The search algorithm used.}
 #'     \item{\code{call}}{The matched call to \code{mine()}.}
 #'   }
@@ -429,9 +432,10 @@ mine.data.frame <- function(x, response_var, model_func = lm,
     data <- data[complete, , drop = FALSE]
   }
 
-  # Small-n AIC warning (skipped for method = "none", which runs no search and
-  # so does no AIC-driven selection).
-  if (identical(metric, AIC) && !identical(method, "none")) {
+  # Small-n AIC warning. Fires for "none" too: that mode fits the full
+  # generated model and reports its AIC as best_metric, so AIC reliability is
+  # if anything a greater concern there (the full model is over-parameterised).
+  if (identical(metric, AIC)) {
     n <- nrow(data)
     p <- length(predictor_vars)
     if (p > 0 && n < 10 * p) {
@@ -461,14 +465,32 @@ mine.data.frame <- function(x, response_var, model_func = lm,
   # fit and the argument-compatibility warnings, none of which apply here.
   if (identical(method, "none")) {
     full_formula <- .build_formula(response_str, candidate_terms)
+    # Call model_func with formula = by name, matching the search hot path
+    # (.try_fit_metric) so a custom model_func behaves identically under "none"
+    # and the searching methods.
     model <- tryCatch(
-      model_func(full_formula, data = data),
+      model_func(formula = full_formula, data = data),
       error = function(e) {
         warning("method = 'none': could not fit the full generated model: ",
                 conditionMessage(e), call. = FALSE)
         NULL
       }
     )
+    # The full generated model is deliberately saturated (every polynomial and
+    # interaction at once). Warn when it is rank-deficient so users don't read
+    # best_metric -- the in-sample metric of an over-parameterised fit -- as a
+    # model-quality or cross-method-comparable score.
+    if (!is.null(model)) {
+      rnk   <- tryCatch(model$rank, error = function(e) NULL)
+      ncoef <- tryCatch(length(stats::coef(model)), error = function(e) NULL)
+      if (is.numeric(rnk) && is.numeric(ncoef) &&
+          length(rnk) == 1L && length(ncoef) == 1L && rnk < ncoef) {
+        warning("method = 'none': the full generated model is rank-deficient (",
+                ncoef - rnk, " of ", ncoef, " coefficients not estimable). ",
+                "best_metric is the in-sample metric of this saturated fit and ",
+                "is not comparable to a searched model's metric.", call. = FALSE)
+      }
+    }
     best_metric <- if (!is.null(model)) {
       tryCatch(as.numeric(metric(model)), error = function(e) NA_real_)
     } else {

@@ -149,7 +149,10 @@ An object of class \code{"mine"}: a list with the following
     \item{\code{candidate_terms}}{For \code{method = "none"}, the generated
       candidate-term pool as a character vector (e.g.
       \code{c("wt", "I(hp^2)", "wt:cyl")}); the same pool described by
-      \code{formula}. \code{NULL} for the searching methods.}
+      \code{formula}. This is the complete generated pool -- every term that
+      could be considered -- independent of \code{keep_all_vars}. \code{NULL}
+      for the searching methods (which build and filter their pool internally
+      but do not return it).}
     \item{\code{method}}{The search algorithm used.}
     \item{\code{call}}{The matched call to \code{mine()}.}
   }

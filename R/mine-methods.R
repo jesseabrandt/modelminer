@@ -2,10 +2,10 @@
 print.mine <- function(x, ...) {
   if (identical(x$method, "none")) {
     cat("modelminer candidate generation (method = none, no search)\n",
-        "Call:            ", deparse1(x$call),    "\n",
-        "Formula:         ", deparse1(x$formula), "\n",
-        "Candidate terms: ", length(x$candidate_terms), "\n",
-        "Metric:          ", format(x$best_metric), "\n",
+        "Call:              ", deparse1(x$call),    "\n",
+        "Formula:           ", deparse1(x$formula), "\n",
+        "Candidate terms:   ", length(x$candidate_terms), "\n",
+        "Full-model metric: ", format(x$best_metric), "\n",
         sep = "")
     return(invisible(x))
   }
@@ -46,10 +46,10 @@ summary.mine <- function(object, ...) {
 print.summary.mine <- function(x, ...) {
   if (identical(x$method, "none")) {
     cat("modelminer candidate generation summary (method = none, no search)\n",
-        "Call:            ", deparse1(x$call),    "\n",
-        "Formula:         ", deparse1(x$formula), "\n",
-        "Candidate terms: ", length(x$candidate_terms), "\n",
-        "Metric:          ", format(x$best_metric), "\n\n",
+        "Call:              ", deparse1(x$call),    "\n",
+        "Formula:           ", deparse1(x$formula), "\n",
+        "Candidate terms:   ", length(x$candidate_terms), "\n",
+        "Full-model metric: ", format(x$best_metric), "\n\n",
         "-- Full model summary ------------------------------------\n",
         sep = "")
     if (!is.null(x$model_summary)) print(x$model_summary, ...)
@@ -68,10 +68,16 @@ print.summary.mine <- function(x, ...) {
 }
 
 #' @export
-coef.mine <- function(object, ...) stats::coef(object$model, ...)
+coef.mine <- function(object, ...) {
+  if (is.null(object$model))
+    stop("No fitted model to extract coefficients from.", call. = FALSE)
+  stats::coef(object$model, ...)
+}
 
 #' @export
 predict.mine <- function(object, newdata, ...) {
+  if (is.null(object$model))
+    stop("No fitted model to predict from.", call. = FALSE)
   if (missing(newdata))
     stats::predict(object$model, ...)
   else

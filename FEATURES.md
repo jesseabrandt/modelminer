@@ -11,6 +11,13 @@ Order of work (most recent first):
 3. Multiple imputation integration (#1)
 4. Forced ("sticky") variables the search can't drop (#4)
 
+**Shipped:**
+
+- Candidate-generation escape hatch — `mine(method = "none")` returns the
+  engineered candidate pool (polynomials + interactions) without searching, for
+  users who want the feature engineering but their own selection. Spec:
+  [`specs/none-method.md`](specs/none-method.md).
+
 ---
 
 ## 1. Multiple imputation integration
