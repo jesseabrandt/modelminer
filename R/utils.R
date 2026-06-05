@@ -8,6 +8,48 @@
   }
 }
 
+# Build the engineered candidate-term pool from a set of predictors: the
+# first-order predictors themselves, plus I(var^k) polynomial terms (numeric
+# predictors only, degrees 2..max_degree), plus interaction terms over
+# combinations of 2..max_interact_vars predictors.
+#
+# Interaction terms are generated with : rather than *, so each candidate
+# represents only the interaction itself -- no implicit main effects. This
+# keeps the search strict: one term added or removed per step, and added_terms
+# bookkeeping in forward_backward stays unambiguous.
+#
+# The downside is that a:b without a and b already in the model is
+# statistically awkward (interaction without main effects). The stepwise search
+# relies on finding a and b first if they improve the metric (and
+# .eligible_candidates() enforces marginality); there is no enforcement here.
+#
+# Used by both the search path in .mine_impl() and method = "none", which
+# returns the pool directly without searching.
+.build_candidate_pool <- function(predictor_vars, numeric_vars,
+                                  max_degree, max_interact_vars) {
+  candidate_terms <- predictor_vars
+
+  if (max_degree >= 2) {
+    for (var in numeric_vars) {
+      for (degree in 2:max_degree) {
+        candidate_terms <- c(candidate_terms, paste0("I(", var, "^", degree, ")"))
+      }
+    }
+  }
+
+  if (max_interact_vars > 1 && length(predictor_vars) >= 2) {
+    max_k <- min(max_interact_vars, length(predictor_vars))
+    for (i in seq_len(max_k - 1)) {
+      interact_terms <- combn(predictor_vars, i + 1, function(vars) {
+        paste(vars, collapse = ":")
+      })
+      candidate_terms <- c(candidate_terms, interact_terms)
+    }
+  }
+
+  candidate_terms
+}
+
 # Extract the base variable from a polynomial term like "I(x^2)".
 # Returns NA_character_ for non-polynomial terms.
 .poly_base_var <- function(term) {

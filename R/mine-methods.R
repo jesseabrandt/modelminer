@@ -1,5 +1,14 @@
 #' @export
 print.mine <- function(x, ...) {
+  if (identical(x$method, "none")) {
+    cat("modelminer candidate generation (method = none, no search)\n",
+        "Call:            ", deparse1(x$call),    "\n",
+        "Formula:         ", deparse1(x$formula), "\n",
+        "Candidate terms: ", length(x$candidate_terms), "\n",
+        "Metric:          ", format(x$best_metric), "\n",
+        sep = "")
+    return(invisible(x))
+  }
   cat("modelminer fit\n",
       "Call:    ", deparse1(x$call),  "\n",
       "Method:  ", x$method,           "\n",
@@ -20,13 +29,14 @@ summary.mine <- function(object, ...) {
                             })
   structure(
     list(
-      call          = object$call,
-      formula       = object$formula,
-      method        = object$method,
-      best_metric   = object$best_metric,
-      n_models      = nrow(object$trace),
-      model_summary = model_summary,
-      trace         = object$trace
+      call            = object$call,
+      formula         = object$formula,
+      method          = object$method,
+      best_metric     = object$best_metric,
+      n_models        = if (is.null(object$trace)) NA_integer_ else nrow(object$trace),
+      candidate_terms = object$candidate_terms,
+      model_summary   = model_summary,
+      trace           = object$trace
     ),
     class = "summary.mine"
   )
@@ -34,6 +44,17 @@ summary.mine <- function(object, ...) {
 
 #' @export
 print.summary.mine <- function(x, ...) {
+  if (identical(x$method, "none")) {
+    cat("modelminer candidate generation summary (method = none, no search)\n",
+        "Call:            ", deparse1(x$call),    "\n",
+        "Formula:         ", deparse1(x$formula), "\n",
+        "Candidate terms: ", length(x$candidate_terms), "\n",
+        "Metric:          ", format(x$best_metric), "\n\n",
+        "-- Full model summary ------------------------------------\n",
+        sep = "")
+    if (!is.null(x$model_summary)) print(x$model_summary, ...)
+    return(invisible(x))
+  }
   cat("modelminer fit summary\n",
       "Call:    ", deparse1(x$call),    "\n",
       "Method:  ", x$method,             "\n",

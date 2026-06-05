@@ -79,6 +79,14 @@
 #'       richer \code{all_models} table than \code{"lasso"}. The best formula
 #'       is whichever optimizes the user's \code{metric}. Requires the
 #'       \pkg{glmnet} package.
+#'     \item \code{"none"} -- candidate generation only, \emph{no search}.
+#'       Builds the engineered candidate pool (first-order predictors +
+#'       \code{I(var^k)} polynomials up to \code{max_degree} + \code{:}
+#'       interactions up to \code{max_interact_vars}), fits the full generated
+#'       formula once, and returns. This is the escape hatch for users who
+#'       want modelminer's feature engineering but their own selection: take
+#'       \code{formula(fit)} or \code{fit$candidate_terms} and use it however
+#'       you like. The returned object has no search \code{$trace}; see Value.
 #'   }
 #'   May also be a custom search function -- see Details.
 #' @param max_terms Maximum number of terms to include in a subset for the
@@ -121,9 +129,15 @@
 #'     \item{\code{model}}{The fitted model object for the selected formula.}
 #'     \item{\code{formula}, \code{Formula}}{The selected formula.}
 #'     \item{\code{trace}, \code{all_models}}{A data frame of every formula
-#'       evaluated and its metric value.}
+#'       evaluated and its metric value. \code{NULL} for
+#'       \code{method = "none"}, which runs no search.}
 #'     \item{\code{best_metric}}{The metric value for the selected model as
-#'       a plain numeric scalar.}
+#'       a plain numeric scalar. For \code{method = "none"} this is the metric
+#'       of the full generated model.}
+#'     \item{\code{candidate_terms}}{For \code{method = "none"}, the generated
+#'       candidate-term pool as a character vector (e.g.
+#'       \code{c("wt", "I(hp^2)", "wt:cyl")}); the same pool described by
+#'       \code{formula}. \code{NULL} for the searching methods.}
 #'     \item{\code{method}}{The search algorithm used.}
 #'     \item{\code{call}}{The matched call to \code{mine()}.}
 #'   }
@@ -144,6 +158,13 @@
 #'
 #' # Pipe-friendly: formula in slot 2 is auto-routed to mine.formula
 #' mtcars |> mine(mpg ~ wt + cyl, max_degree = 1, max_interact_vars = 1)
+#'
+#' # Escape hatch: generate the engineered candidate formula without searching,
+#' # then use it with your own modelling/selection workflow.
+#' gen <- mine(mpg ~ wt + hp, data = mtcars, method = "none",
+#'             max_degree = 2, max_interact_vars = 2)
+#' formula(gen)            # mpg ~ wt + hp + I(wt^2) + I(hp^2) + wt:hp
+#' gen$candidate_terms     # the same pool as a character vector
 #'
 #' @export
 #' @importFrom rlang enexpr as_string is_call caller_env
@@ -342,14 +363,15 @@ mine.data.frame <- function(x, response_var, model_func = lm,
 
   structure(
     list(
-      model       = result$model,
-      formula     = result$Formula,
-      Formula     = result$Formula,
-      method      = result$method,
-      best_metric = result$best_metric,
-      trace       = result$all_models,
-      all_models  = result$all_models,
-      call        = call
+      model           = result$model,
+      formula         = result$Formula,
+      Formula         = result$Formula,
+      method          = result$method,
+      best_metric     = result$best_metric,
+      trace           = result$all_models,
+      all_models      = result$all_models,
+      candidate_terms = result$candidate_terms,
+      call            = call
     ),
     class = "mine"
   )
@@ -388,7 +410,8 @@ mine.data.frame <- function(x, response_var, model_func = lm,
                                    "greedy_alt", "greedy_alt_full",
                                    "greedy_alt_fb", "greedy_alt_full_fb",
                                    "forward_backward", "backward",
-                                   "exhaustive", "lasso", "lasso_path"))
+                                   "exhaustive", "lasso", "lasso_path",
+                                   "none"))
   }
 
   # ---- Shared setup: candidate term pool ----
@@ -406,8 +429,9 @@ mine.data.frame <- function(x, response_var, model_func = lm,
     data <- data[complete, , drop = FALSE]
   }
 
-  # Small-n AIC warning
-  if (identical(metric, AIC)) {
+  # Small-n AIC warning (skipped for method = "none", which runs no search and
+  # so does no AIC-driven selection).
+  if (identical(metric, AIC) && !identical(method, "none")) {
     n <- nrow(data)
     p <- length(predictor_vars)
     if (p > 0 && n < 10 * p) {
@@ -418,39 +442,51 @@ mine.data.frame <- function(x, response_var, model_func = lm,
     }
   }
 
-  candidate_terms <- predictor_vars
-
   # Only numeric variables can be raised to a power; factors are excluded.
   numeric_vars <- predictor_vars[
     sapply(predictor_vars, function(v) is.numeric(data[[v]]))
   ]
-  if (max_degree >= 2) {
-    for (var in numeric_vars) {
-      for (degree in 2:max_degree) {
-        candidate_terms <- c(candidate_terms, paste0("I(", var, "^", degree, ")"))
-      }
-    }
-  }
 
-  # Interaction terms are generated with : rather than *, so each candidate
-  # represents only the interaction itself -- no implicit main effects.
-  # This keeps the search strict: one term added or removed per step, and
-  # added_terms bookkeeping in forward_backward stays unambiguous.
-  #
-  # The downside is that a:b without a and b already in the model is
-  # statistically awkward (interaction without main effects). The current
-  # design relies on the search finding a and b first if they improve the
-  # metric, but there's no enforcement. A future improvement might be to
-  # require main effects as prerequisites before their interaction is offered
-  # as a candidate, or to group them and treat the whole family as one step.
-  if (max_interact_vars > 1 && length(predictor_vars) >= 2) {
-    max_k <- min(max_interact_vars, length(predictor_vars))
-    for (i in seq_len(max_k - 1)) {
-      interact_terms <- combn(predictor_vars, i + 1, function(vars) {
-        paste(vars, collapse = ":")
-      })
-      candidate_terms <- c(candidate_terms, interact_terms)
+  # Engineered candidate pool: first-order predictors + I(var^k) polynomials +
+  # `:` interactions. See .build_candidate_pool() for the `:`-vs-`*` rationale
+  # and the marginality caveat. The search methods consume this pool; method =
+  # "none" returns it directly.
+  candidate_terms <- .build_candidate_pool(predictor_vars, numeric_vars,
+                                           max_degree, max_interact_vars)
+
+  # ---- method = "none": candidate generation, no search --------------------
+  # Build the full generated formula, fit it once with model_func, and return.
+  # There is no search trace; the returned result carries the candidate-term
+  # vector so callers can surface it. Short-circuits before the starting-model
+  # fit and the argument-compatibility warnings, none of which apply here.
+  if (identical(method, "none")) {
+    full_formula <- .build_formula(response_str, candidate_terms)
+    model <- tryCatch(
+      model_func(full_formula, data = data),
+      error = function(e) {
+        warning("method = 'none': could not fit the full generated model: ",
+                conditionMessage(e), call. = FALSE)
+        NULL
+      }
+    )
+    best_metric <- if (!is.null(model)) {
+      tryCatch(as.numeric(metric(model)), error = function(e) NA_real_)
+    } else {
+      NA_real_
     }
+    if (verbose) {
+      message("method = 'none': generated ", length(candidate_terms),
+              " candidate term(s); no search performed.")
+      message("Formula: ", deparse1(full_formula))
+    }
+    return(list(
+      Formula         = full_formula,
+      all_models      = NULL,
+      candidate_terms = candidate_terms,
+      model           = model,
+      best_metric     = best_metric,
+      method          = "none"
+    ))
   }
 
   # ---- Starting formula ----
