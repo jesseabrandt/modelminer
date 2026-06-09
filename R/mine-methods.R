@@ -1,21 +1,19 @@
 #' @export
 print.mine <- function(x, ...) {
-  if (identical(x$method, "none")) {
-    cat("modelminer candidate generation (method = none, no search)\n",
-        "Call:              ", deparse1(x$call),    "\n",
-        "Formula:           ", deparse1(x$formula), "\n",
-        "Candidate terms:   ", length(x$candidate_terms), "\n",
-        "Full-model metric: ", format(x$best_metric), "\n",
-        sep = "")
-    return(invisible(x))
-  }
-  cat("modelminer fit\n",
-      "Call:    ", deparse1(x$call),  "\n",
-      "Method:  ", x$method,           "\n",
-      "Formula: ", deparse1(x$formula), "\n",
+  # A NULL trace means no search ran (method = "none", or any future
+  # generation-only method) -- key off that structural fact, not the method name.
+  searched <- !is.null(x$trace)
+  cat("modelminer ",
+      if (searched) "fit\n" else "candidate generation (method = none, no search)\n",
+      "Call:    ", deparse1(x$call),     "\n",
+      "Method:  ", x$method,             "\n",
+      "Formula: ", deparse1(x$formula),  "\n",
       "Metric:  ", format(x$best_metric), "\n",
-      "Models evaluated: ", nrow(x$trace), "\n",
       sep = "")
+  if (searched)
+    cat("Models evaluated: ", nrow(x$trace), "\n", sep = "")
+  else
+    cat("Candidate terms:  ", length(x$candidate_terms), "\n", sep = "")
   invisible(x)
 }
 
@@ -44,24 +42,22 @@ summary.mine <- function(object, ...) {
 
 #' @export
 print.summary.mine <- function(x, ...) {
-  if (identical(x$method, "none")) {
-    cat("modelminer candidate generation summary (method = none, no search)\n",
-        "Call:              ", deparse1(x$call),    "\n",
-        "Formula:           ", deparse1(x$formula), "\n",
-        "Candidate terms:   ", length(x$candidate_terms), "\n",
-        "Full-model metric: ", format(x$best_metric), "\n\n",
-        "-- Full model summary ------------------------------------\n",
-        sep = "")
-    if (!is.null(x$model_summary)) print(x$model_summary, ...)
-    return(invisible(x))
-  }
-  cat("modelminer fit summary\n",
-      "Call:    ", deparse1(x$call),    "\n",
+  searched <- !is.null(x$trace)
+  cat("modelminer ",
+      if (searched) "fit summary\n"
+      else          "candidate generation summary (method = none, no search)\n",
+      "Call:    ", deparse1(x$call),     "\n",
       "Method:  ", x$method,             "\n",
       "Formula: ", deparse1(x$formula),  "\n",
       "Metric:  ", format(x$best_metric), "\n",
-      "Models evaluated: ", x$n_models,  "\n\n",
-      "-- Final model summary -----------------------------------\n",
+      sep = "")
+  if (searched)
+    cat("Models evaluated: ", x$n_models, "\n", sep = "")
+  else
+    cat("Candidate terms:  ", length(x$candidate_terms), "\n", sep = "")
+  cat("\n",
+      if (searched) "-- Final model summary -----------------------------------\n"
+      else          "-- Full model summary ------------------------------------\n",
       sep = "")
   if (!is.null(x$model_summary)) print(x$model_summary, ...)
   invisible(x)

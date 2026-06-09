@@ -50,6 +50,30 @@
   candidate_terms
 }
 
+# Enrich a search result with a ready-to-use fitted model, a scalar
+# best_metric, and the method label. Refitting the selected formula here --
+# rather than inside each search algorithm -- keeps the returned structure
+# consistent across every method, including method = "none" (which supplies a
+# Formula but runs no search). On refit failure, model is NULL and best_metric
+# is NA; `refit_msg` heads that warning so callers can phrase it for context.
+.enrich_result <- function(result, model_func, metric, data, method_label,
+                           refit_msg = "Could not refit best model: ") {
+  result$model <- tryCatch(
+    model_func(result$Formula, data = data),
+    error = function(e) {
+      warning(refit_msg, conditionMessage(e), call. = FALSE)
+      NULL
+    }
+  )
+  result$best_metric <- if (!is.null(result$model)) {
+    tryCatch(metric(result$model), error = function(e) NA_real_)
+  } else {
+    NA_real_
+  }
+  result$method <- method_label
+  result
+}
+
 # Extract the base variable from a polynomial term like "I(x^2)".
 # Returns NA_character_ for non-polynomial terms.
 .poly_base_var <- function(term) {

@@ -465,50 +465,38 @@ mine.data.frame <- function(x, response_var, model_func = lm,
   # fit and the argument-compatibility warnings, none of which apply here.
   if (identical(method, "none")) {
     full_formula <- .build_formula(response_str, candidate_terms)
-    # Call model_func with formula = by name, matching the search hot path
-    # (.try_fit_metric) so a custom model_func behaves identically under "none"
-    # and the searching methods.
-    model <- tryCatch(
-      model_func(formula = full_formula, data = data),
-      error = function(e) {
-        warning("method = 'none': could not fit the full generated model: ",
-                conditionMessage(e), call. = FALSE)
-        NULL
-      }
+    # "none" is a degenerate search: it evaluates exactly one model (the full
+    # generated formula) and runs no selection. Fit + score + tag it through the
+    # same .enrich_result() the searching methods use at the tail, so the return
+    # shape stays consistent. all_models is NULL (no trace); candidate_terms is
+    # carried so callers can surface the generated pool.
+    result <- .enrich_result(
+      list(Formula = full_formula, all_models = NULL,
+           candidate_terms = candidate_terms),
+      model_func, metric, data, method_label = "none",
+      refit_msg = "method = 'none': could not fit the full generated model: "
     )
     # The full generated model is deliberately saturated (every polynomial and
     # interaction at once). Warn when it is rank-deficient so users don't read
     # best_metric -- the in-sample metric of an over-parameterised fit -- as a
     # model-quality or cross-method-comparable score.
-    if (!is.null(model)) {
-      rnk   <- tryCatch(model$rank, error = function(e) NULL)
-      ncoef <- tryCatch(length(stats::coef(model)), error = function(e) NULL)
-      if (is.numeric(rnk) && is.numeric(ncoef) &&
-          length(rnk) == 1L && length(ncoef) == 1L && rnk < ncoef) {
+    if (!is.null(result$model)) {
+      rnk   <- tryCatch(result$model$rank, error = function(e) NULL)
+      ncoef <- tryCatch(length(stats::coef(result$model)), error = function(e) NULL)
+      if (is.numeric(rnk) && length(rnk) == 1L && is.numeric(ncoef) &&
+          rnk < ncoef) {
         warning("method = 'none': the full generated model is rank-deficient (",
                 ncoef - rnk, " of ", ncoef, " coefficients not estimable). ",
                 "best_metric is the in-sample metric of this saturated fit and ",
                 "is not comparable to a searched model's metric.", call. = FALSE)
       }
     }
-    best_metric <- if (!is.null(model)) {
-      tryCatch(as.numeric(metric(model)), error = function(e) NA_real_)
-    } else {
-      NA_real_
-    }
     if (verbose) {
       message("method = 'none': generated ", length(candidate_terms),
               " candidate term(s); no search performed.")
       message("Formula: ", deparse1(full_formula))
     }
-    return(list(
-      Formula         = full_formula,
-      all_models      = NULL,
-      candidate_terms = candidate_terms,
-      model           = model,
-      best_metric     = best_metric,
-      method          = "none"
-    ))
+    return(result)
   }
 
   # ---- Starting formula ----
@@ -759,26 +747,15 @@ mine.data.frame <- function(x, response_var, model_func = lm,
 
   # ---- Enrich and summarise result ----
 
-  # Refit the best formula so the caller gets a ready-to-use model object.
-  # Done here rather than inside each algorithm so the return structure is
-  # consistent regardless of which search was used.
-  result$model <- tryCatch(
-    model_func(result$Formula, data = data),
-    error = function(e) {
-      warning("Could not refit best model: ", conditionMessage(e), call. = FALSE)
-      NULL
-    }
+  # Refit the best formula, score it, and tag the method. Done here -- via the
+  # same .enrich_result() that method = "none" uses -- rather than inside each
+  # algorithm, so the return structure is consistent regardless of which search
+  # was used. method_label records which algorithm produced this result, useful
+  # when results are collected by compare_methods() or inspected.
+  result <- .enrich_result(
+    result, model_func, metric, data,
+    method_label = if (is.function(method)) "custom" else method
   )
-
-  result$best_metric <- if (!is.null(result$model)) {
-    tryCatch(metric(result$model), error = function(e) NA_real_)
-  } else {
-    NA_real_
-  }
-
-  # Record which algorithm produced this result -- useful when results are
-  # collected by compare_methods() or inspected programmatically.
-  result$method <- if (is.function(method)) "custom" else method
 
   if (verbose) {
     message("\n-- Best formula ------------------------------------------")
