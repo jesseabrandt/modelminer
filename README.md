@@ -221,7 +221,11 @@ backward compatibility)
 - `$formula` / `$Formula` -- selected formula
 - `$model` -- fitted model for the selected formula
 - `$trace` / `$all_models` -- every formula evaluated and its metric
-- `$best_metric` -- numeric metric value for the selected model
+- `$best_metric` -- numeric metric value for the selected model (`NA` for
+  `mine_lasso()`, which selects via cross-validated lambda, not a metric)
+- `$selector_fit` -- the underlying selection-engine fit, when the method has
+  one: a `cv.glmnet` object for `"lasso"`, a `glmnet` object for `"lasso_path"`
+  (`NULL` for stepwise methods)
 - `$method` -- search algorithm used (`"greedy"`, `"backward"`, `"custom"`, etc.)
 - `$call` -- the `mine()` call that produced the fit
 
