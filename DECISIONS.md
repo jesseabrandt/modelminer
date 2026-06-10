@@ -18,3 +18,8 @@ See `~/workspace/docs/decision-log.md` for the convention.
 - **Choice:** DECISIONS.md per docs/decision-log.md (workspace repo)
 - **Why:** design choices from today forward are logged or queued, never silent; pre-log contents are unattributed and not settled until promoted
 - **Reversible:** no · **Decided by:** jesse
+
+## 2026-06-10 — MI-aware variable selection lives in GLM, not modelminer
+- **Choice:** stability voting across imputations in GLM (extend main-effects approach); no modelminer change
+- **Why:** reuses proven approach, keeps modelminer lean; promote to Tier 1 only if another project needs it
+- **Reversible:** no · **Decided by:** jesse
