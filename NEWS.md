@@ -4,6 +4,12 @@
 
 * New `from_slot()` metric helper for extracting model-embedded fit
   statistics by slot name (composes with `extract_metric()`).
+* New `method = "none"` mode builds the engineered candidate pool
+  (first-order predictors + polynomial terms + interactions) and fits the
+  full generated formula once, running no search. An escape hatch for users
+  who want modelminer's feature engineering but their own selection method.
+  The returned object carries the new `$candidate_terms` field (the full
+  pool); `print()`/`summary()` degrade gracefully for the no-search case.
 
 # modelminer 0.1.1
 
