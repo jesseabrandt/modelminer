@@ -1,5 +1,6 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
+^LICENSE\.md$
 ^CLAUDE\.md$
 ^TODO\.md$
 ^north_star\.md$
