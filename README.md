@@ -57,6 +57,14 @@ Set `method` to choose the search strategy. Both call forms
 (`mine(y ~ ., data)` and `mine(data, y)`) work for every method; the
 data-first form is shown below for brevity.
 
+By default `mine()` prints each candidate formula and its metric as it searches.
+Pass `verbose = FALSE` to silence that per-candidate output (handy in scripts,
+loops, and reports):
+
+```r
+result <- mine(mtcars, mpg, verbose = FALSE)
+```
+
 ```r
 # Greedy forward selection (default) -- fast, path-dependent
 result <- mine(mtcars, mpg, method = "greedy")
@@ -84,6 +92,17 @@ result <- mine(mtcars, mpg, method = "backward")
 
 # Exhaustive best-subset search (slower; guaranteed optimal within max_terms)
 result <- mine(mtcars, mpg, method = "exhaustive", max_terms = 5)
+
+# L1-regularised selection via glmnet's cross-validated lasso (requires glmnet)
+result <- mine(mtcars, mpg, method = "lasso")
+
+# Full glmnet regularization path -- records one model per variable entry/exit
+result <- mine(mtcars, mpg, method = "lasso_path")
+
+# No search: just build the engineered candidate pool and fit it once -- an
+# escape hatch for pairing modelminer's feature engineering with your own
+# selection. The pool is in fit$candidate_terms; see ?mine.
+result <- mine(mtcars, mpg, method = "none")
 
 # Pass a custom search function for experimental algorithms
 my_search <- function(candidate_terms, current_formula, current_metric,
@@ -203,6 +222,7 @@ cmp$details     # named list of full mine() results per config
 | `keep_all_vars`    | `FALSE`     | Start from all first-order terms instead of intercept-only|
 | `method`           | `"greedy"`  | Search algorithm (see above) or a custom function         |
 | `max_terms`        | `NULL` (5)  | Max subset size for `method = "exhaustive"`               |
+| `verbose`          | `TRUE`      | Print each candidate formula/metric; `FALSE` to silence   |
 
 ## Return Value
 
