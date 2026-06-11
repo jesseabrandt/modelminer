@@ -5,7 +5,7 @@ An R package for automated model selection with feature engineering. Starting fr
 ## Installation
 
 ```r
-remotes::install_git("https://github.com/jesseabrandt/modelminer.git")
+remotes::install_git("https://github.com/jessebrandtdata/modelminer.git")
 ```
 
 A Codeberg mirror is available at <https://codeberg.org/jesseabrandt/modelminer.git>.

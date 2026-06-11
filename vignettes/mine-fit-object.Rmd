@@ -36,7 +36,7 @@ same fields and the same S3 methods for `print()`, `summary()`, `coef()`,
 
 ```r
 # From source (requires the remotes package)
-remotes::install_git("https://github.com/jesseabrandt/modelminer.git")
+remotes::install_git("https://github.com/jessebrandtdata/modelminer.git")
 ```
 
 ---
