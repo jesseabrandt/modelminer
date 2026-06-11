@@ -1,6 +1,6 @@
 # modelminer
 
-An R package for automated model selection with feature engineering. Starting from an intercept-only (or all-first-order) model, `mine()` searches through polynomial terms and interactions to find the formula that best optimizes a user-supplied metric.
+An R package for automated model selection with feature engineering.
 
 ## Installation
 
