@@ -1,7 +1,22 @@
 # modelminer 0.2.0
 
+## Breaking changes
+
+* `mine_lasso()` no longer takes `metric` or `metric_comparison`. Lasso selects
+  variables via the cross-validated penalty (lambda), not by optimising a
+  metric, so those arguments never drove its decisions (`metric_comparison` was
+  inert; `metric` only scored an informational refit). The wrapper now takes
+  neither. On a lasso fit, `$best_metric` is `NA` (no metric drives selection) —
+  compute any metric yourself from the returned model, e.g.
+  `AIC(extract_model(fit))`. `mine(method = "lasso", metric = ...)` is
+  unchanged; only the `mine_lasso()` convenience wrapper changed.
+
 ## Features
 
+* New `$selector_fit` field on the `"mine"` object holds the underlying
+  selection engine when the method has one: a `cv.glmnet` object for `"lasso"`,
+  a `glmnet` object for `"lasso_path"` (`NULL` for stepwise methods). The CV
+  error curve and full lambda path are recoverable from it.
 * New `from_slot()` metric helper for extracting model-embedded fit
   statistics by slot name (composes with `extract_metric()`).
 * New `method = "none"` mode builds the engineered candidate pool

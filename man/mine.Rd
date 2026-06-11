@@ -145,7 +145,8 @@ An object of class \code{"mine"}: a list with the following
       \code{method = "none"}, which runs no search.}
     \item{\code{best_metric}}{The metric value for the selected model as
       a plain numeric scalar. For \code{method = "none"} this is the metric
-      of the full generated model.}
+      of the full generated model. \code{NA} when no metric drives selection
+      (see \code{\link{mine_lasso}}).}
     \item{\code{candidate_terms}}{For \code{method = "none"}, the generated
       candidate-term pool as a character vector (e.g.
       \code{c("wt", "I(hp^2)", "wt:cyl")}); the same pool described by
@@ -153,6 +154,10 @@ An object of class \code{"mine"}: a list with the following
       could be considered -- independent of \code{keep_all_vars}. \code{NULL}
       for the searching methods (which build and filter their pool internally
       but do not return it).}
+    \item{\code{selector_fit}}{The underlying selection-engine fit, when the
+      method has one: a \code{cv.glmnet} object for \code{"lasso"}, a
+      \code{glmnet} object for \code{"lasso_path"}. \code{NULL} for stepwise
+      methods.}
     \item{\code{method}}{The search algorithm used.}
     \item{\code{call}}{The matched call to \code{mine()}.}
   }

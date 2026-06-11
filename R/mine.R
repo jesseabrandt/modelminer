@@ -133,7 +133,8 @@
 #'       \code{method = "none"}, which runs no search.}
 #'     \item{\code{best_metric}}{The metric value for the selected model as
 #'       a plain numeric scalar. For \code{method = "none"} this is the metric
-#'       of the full generated model.}
+#'       of the full generated model. \code{NA} when no metric drives selection
+#'       (see \code{\link{mine_lasso}}).}
 #'     \item{\code{candidate_terms}}{For \code{method = "none"}, the generated
 #'       candidate-term pool as a character vector (e.g.
 #'       \code{c("wt", "I(hp^2)", "wt:cyl")}); the same pool described by
@@ -141,6 +142,10 @@
 #'       could be considered -- independent of \code{keep_all_vars}. \code{NULL}
 #'       for the searching methods (which build and filter their pool internally
 #'       but do not return it).}
+#'     \item{\code{selector_fit}}{The underlying selection-engine fit, when the
+#'       method has one: a \code{cv.glmnet} object for \code{"lasso"}, a
+#'       \code{glmnet} object for \code{"lasso_path"}. \code{NULL} for stepwise
+#'       methods.}
 #'     \item{\code{method}}{The search algorithm used.}
 #'     \item{\code{call}}{The matched call to \code{mine()}.}
 #'   }
@@ -371,6 +376,9 @@ mine.data.frame <- function(x, response_var, model_func = lm,
       Formula         = result$Formula,
       method          = result$method,
       best_metric     = result$best_metric,
+      # Underlying selection-engine fit, when the method has one (cv.glmnet for
+      # "lasso", glmnet for "lasso_path"). NULL for stepwise methods.
+      selector_fit    = result$selector_fit,
       trace           = result$all_models,
       all_models      = result$all_models,
       candidate_terms = result$candidate_terms,
@@ -432,10 +440,13 @@ mine.data.frame <- function(x, response_var, model_func = lm,
     data <- data[complete, , drop = FALSE]
   }
 
-  # Small-n AIC warning. Fires for "none" too: that mode fits the full
-  # generated model and reports its AIC as best_metric, so AIC reliability is
-  # if anything a greater concern there (the full model is over-parameterised).
-  if (identical(metric, AIC)) {
+  # Small-n AIC warning. Skipped for method = "lasso": there AIC only scores
+  # the refit, it does not drive selection (cross-validated lambda does), so a
+  # warning about AIC's reliability for selection would mislead. "lasso_path"
+  # is not skipped -- there AIC genuinely picks among the path's models. Fires
+  # for "none" too: that mode fits the full (over-parameterised) generated model
+  # and reports its AIC as best_metric, so AIC reliability is a real concern.
+  if (identical(metric, AIC) && !(is.character(method) && identical(method, "lasso"))) {
     n <- nrow(data)
     p <- length(predictor_vars)
     if (p > 0 && n < 10 * p) {
@@ -539,10 +550,14 @@ mine.data.frame <- function(x, response_var, model_func = lm,
     error = function(e) e
   )
 
-  start_metric <- if (!inherits(start_model, "error")) {
-    tryCatch(metric(start_model), error = function(e) e)
-  } else {
+  start_metric <- if (inherits(start_model, "error")) {
     start_model  # propagate the error
+  } else if (is.null(metric)) {
+    # No metric supplied (mine_lasso() default): lasso doesn't use the start
+    # model's metric, so record NA rather than failing.
+    NA_real_
+  } else {
+    tryCatch(metric(start_model), error = function(e) e)
   }
 
   intercept_ok <- !inherits(start_model, "error") &&
@@ -579,11 +594,18 @@ mine.data.frame <- function(x, response_var, model_func = lm,
       })
       if (is.null(m)) next
 
-      mv <- tryCatch(metric(m), error = function(e) {
-        warning("Fallback: could not compute metric for ", deparse1(f), ": ",
-                conditionMessage(e), call. = FALSE)
-        NULL
-      })
+      # No metric supplied (mine_lasso()): record NA. Lasso re-derives its
+      # terms from the full candidate pool, so the fallback only needs *a*
+      # fittable starting model -- it doesn't matter which.
+      mv <- if (is.null(metric)) {
+        NA_real_
+      } else {
+        tryCatch(metric(m), error = function(e) {
+          warning("Fallback: could not compute metric for ", deparse1(f), ": ",
+                  conditionMessage(e), call. = FALSE)
+          NULL
+        })
+      }
       if (is.null(mv)) next
 
       if (verbose) message("Formula: ", deparse1(f), " Metric: ", mv)
@@ -598,10 +620,13 @@ mine.data.frame <- function(x, response_var, model_func = lm,
       stop("No single-predictor model could be fit. Cannot proceed.",
            call. = FALSE)
 
-    best_idx      <- which(vapply(fallback_metrics, identical,
-                                   logical(1),
-                                   do.call(metric_comparison, fallback_metrics)))
-    best_idx      <- best_idx[1L]
+    best_idx      <- if (is.null(metric)) {
+      # No metric to compare on; any successfully-fit predictor is a fine start.
+      1L
+    } else {
+      which(vapply(fallback_metrics, identical, logical(1),
+                   do.call(metric_comparison, fallback_metrics)))[1L]
+    }
     start_formula <- fallback_formulas[[best_idx]]
     start_metric  <- fallback_metrics[[best_idx]]
     initial_terms <- all.vars(start_formula[[3]])
@@ -629,8 +654,10 @@ mine.data.frame <- function(x, response_var, model_func = lm,
               call. = FALSE)
     }
 
-    # metric with lasso: cv.glmnet drives selection, not the user's metric
-    if (identical(method, "lasso") && !identical(metric, AIC)) {
+    # metric with lasso: cv.glmnet drives selection, not the user's metric.
+    # (mine_lasso() passes metric = NULL and needs no warning -- it never
+    # claims the metric matters; only mine(method = "lasso", metric = ...) does.)
+    if (identical(method, "lasso") && !is.null(metric) && !identical(metric, AIC)) {
       warning(
         "method = 'lasso' uses cv.glmnet's internal CV error for variable ",
         "selection, not your metric. Your metric is only used to score the ",
@@ -734,6 +761,8 @@ mine.data.frame <- function(x, response_var, model_func = lm,
             c(common_args, list(response_str  = response_str,
                                 initial_terms = initial_terms)))
   } else if (method == "lasso") {
+    # common_args still carries metric_comparison (unused by lasso); it reaches
+    # .mine_lasso via ... and is stripped there before the glmnet call.
     do.call(.mine_lasso,
             c(common_args, list(response_str = response_str,
                                 lambda_rule = lambda_rule, ...)))
@@ -770,10 +799,13 @@ mine.data.frame <- function(x, response_var, model_func = lm,
     }
   )
 
-  result$best_metric <- if (!is.null(result$model)) {
-    tryCatch(metric(result$model), error = function(e) NA_real_)
-  } else {
+  # best_metric is the value of the *user's* metric for the selected model.
+  # When no metric was supplied (mine_lasso()), there is none -- record NA.
+  # The CV error and full lambda path live on result$selector_fit instead.
+  result$best_metric <- if (is.null(metric) || is.null(result$model)) {
     NA_real_
+  } else {
+    tryCatch(metric(result$model), error = function(e) NA_real_)
   }
 
   # Record which algorithm produced this result -- useful when results are
