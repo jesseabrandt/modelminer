@@ -14,20 +14,20 @@ Authors@R: c(
       role = "aut"
     )
   )
-Description: Automated model selection that searches over polynomial terms and
-    interaction terms to find the formula that best optimizes a user-supplied
-    metric (default: AIC). Supports greedy forward selection, forward-backward
-    stepwise search, backward elimination, phased greedy variants, and
-    L1-regularised selection via lasso and lasso-path methods (requires
-    'glmnet'). Works with any model function that accepts a formula and data
-    argument, including lm, glm, and matrix-based models adapted via
-    formula_wrap().
+Description: Automated model selection over engineered features (polynomial
+    terms and interaction terms) using a choice of search strategies (default
+    metric: AIC). Supports greedy forward selection, forward-backward stepwise
+    search, backward elimination, phased greedy variants, L1-regularised
+    selection via lasso and lasso-path methods (requires 'glmnet'), and a
+    no-search 'none' mode that returns the engineered candidate pool. Works
+    with any model function that accepts a formula and data argument, including
+    lm, glm, and matrix-based models adapted via formula_wrap().
 Depends: R (>= 4.0.0)
 License: MIT + file LICENSE
 Encoding: UTF-8
 Language: en-US
-URL: https://github.com/jesseabrandt/modelminer, https://codeberg.org/jesseabrandt/modelminer
-BugReports: https://github.com/jesseabrandt/modelminer/issues
+URL: https://github.com/jessebrandtdata/modelminer, https://codeberg.org/jesseabrandt/modelminer
+BugReports: https://github.com/jessebrandtdata/modelminer/issues
 Imports:
     rlang
 Suggests:
