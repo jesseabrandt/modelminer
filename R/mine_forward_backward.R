@@ -16,6 +16,7 @@
 # remove a term from the vector and pass the rest to .build_formula().
 #
 # Returns list(Formula, all_models) matching the mine() contract.
+#' @noRd
 .mine_forward_backward <- function(candidate_terms, current_formula, current_metric,
                                    results, model_func, metric, metric_comparison,
                                    data, verbose = TRUE, response_str,

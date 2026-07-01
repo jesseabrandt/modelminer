@@ -20,6 +20,7 @@
 # That is what round_terms does below.
 #
 # Returns list(Formula, all_models) matching the mine() contract.
+#' @noRd
 .mine_greedy_star <- function(candidate_terms, current_formula, current_metric,
                                results, model_func, metric, metric_comparison,
                                data, verbose = TRUE, predictor_vars, numeric_vars,

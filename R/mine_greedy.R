@@ -13,6 +13,7 @@
 # Terms that cause model-fitting or metric errors are skipped with a warning
 # so that one bad candidate (e.g., a singular column combination) does not
 # abort the entire search.
+#' @noRd
 .mine_greedy <- function(candidate_terms, current_formula, current_metric,
                          results, model_func, metric, metric_comparison, data,
                          verbose = TRUE) {

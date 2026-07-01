@@ -1,3 +1,18 @@
+# $ access on a "mine" object. Warns (once per session) when the deprecated
+# field names `Formula` / `all_models` are used and returns the value of the
+# stored field; all other access behaves like the default list `$`. The user-
+# facing deprecation is documented under ?mine ("Deprecated fields") and in
+# NEWS. Uses .subset2() to fetch the field without re-dispatching $.mine.
+#' @export
+"$.mine" <- function(x, name) {
+  if (identical(name, "Formula")) {
+    .deprecate_mine_field("Formula", "formula")
+  } else if (identical(name, "all_models")) {
+    .deprecate_mine_field("all_models", "trace")
+  }
+  .subset2(x, name)
+}
+
 #' @export
 print.mine <- function(x, ...) {
   if (identical(x$method, "none")) {

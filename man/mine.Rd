@@ -100,7 +100,7 @@ the formula. Defaults to \code{FALSE}.}
   \item \code{"lasso_path"} -- walks the full \code{glmnet()}
     regularization path and records every model at which the selected
     variable set changes (each variable entry/exit point). Produces a
-    richer \code{all_models} table than \code{"lasso"}. The best formula
+    richer \code{$trace} table than \code{"lasso"}. The best formula
     is whichever optimizes the user's \code{metric}. Requires the
     \pkg{glmnet} package.
   \item \code{"none"} -- candidate generation only, \emph{no search}.
@@ -121,7 +121,7 @@ methods.}
 \item{lambda_rule}{For \code{method = "lasso"}: which lambda to use for
 the selected formula. One of \code{"lambda.min"} (default, best CV
 performance) or \code{"lambda.1se"} (sparser, within 1 SE of the
-minimum). Both models appear in \code{all_models} regardless of this
+minimum). Both models appear in \code{$trace} regardless of this
 choice. Ignored by other methods.}
 
 \item{verbose}{If \code{TRUE} (the default), print progress messages
@@ -134,9 +134,7 @@ call is forwarded to \code{mine.formula}.}
 }
 \value{
 An object of class \code{"mine"}: a list with the following
-  elements (old and new field names are both populated, so existing code
-  that indexes with \code{$Formula} / \code{$all_models} continues to
-  work):
+  elements:
   \describe{
     \item{\code{model}}{The fitted model object for the selected formula.}
     \item{\code{formula}, \code{Formula}}{The selected formula.}
@@ -161,6 +159,11 @@ An object of class \code{"mine"}: a list with the following
     \item{\code{method}}{The search algorithm used.}
     \item{\code{call}}{The matched call to \code{mine()}.}
   }
+  \strong{Deprecated fields.} The legacy names \code{$Formula} (now
+  \code{$formula}) and \code{$all_models} (now \code{$trace}) are still
+  populated this release, but accessing them with \code{$} emits a
+  deprecation warning (once per session) and they will be removed in a
+  future version. Update old code to the canonical names above.
   S3 methods are provided for \code{\link[base]{print}},
   \code{\link[base]{summary}}, \code{\link[stats]{coef}},
   \code{\link[stats]{predict}}, \code{\link[stats]{formula}}, and

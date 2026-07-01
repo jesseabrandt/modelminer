@@ -1,5 +1,6 @@
 # Build a formula from a response variable name and a character vector of terms.
 # An empty terms vector produces response ~ 1 (intercept only).
+#' @noRd
 .build_formula <- function(response_str, terms) {
   if (length(terms) == 0) {
     stats::reformulate("1", response = response_str)
@@ -52,6 +53,7 @@
 
 # Extract the base variable from a polynomial term like "I(x^2)".
 # Returns NA_character_ for non-polynomial terms.
+#' @noRd
 .poly_base_var <- function(term) {
   m <- regmatches(term, regexec("^I\\((.+)\\^[0-9]+\\)$", term))[[1]]
   if (length(m) == 2L) m[2L] else NA_character_
@@ -60,6 +62,7 @@
 # Filter candidate terms so that polynomial terms I(var^k) are only included
 # when var is already a main-effect term in the current formula (marginality
 # principle).  Non-polynomial candidates pass through unchanged.
+#' @noRd
 .eligible_candidates <- function(candidate_terms, current_formula) {
   current_labels <- attr(stats::terms(current_formula), "term.labels")
   Filter(function(t) {
@@ -97,6 +100,7 @@ to_xy <- function(data, formula) {
 }
 
 # Tolerance-aware check: did new_metric improve over old_metric?
+#' @noRd
 .metric_improved <- function(new_metric, old_metric, metric_comparison) {
   best <- do.call(metric_comparison, list(old_metric, new_metric))
   if (is.numeric(best) && length(best) == 1L &&
@@ -108,6 +112,7 @@ to_xy <- function(data, formula) {
 }
 
 # Find index of best metric in a list, using tolerance for numerics.
+#' @noRd
 .find_best_index <- function(metrics, metric_comparison) {
   best <- do.call(metric_comparison, metrics)
   if (is.numeric(best) && length(best) == 1L) {
@@ -120,6 +125,7 @@ to_xy <- function(data, formula) {
 }
 
 # Try fitting a model and computing its metric. Returns list(metric=) or NULL.
+#' @noRd
 .try_fit_metric <- function(formula, model_func, metric, data,
                             term_label = "", direction = "", verbose = TRUE) {
   model <- tryCatch(
@@ -152,6 +158,7 @@ to_xy <- function(data, formula) {
 }
 
 # List-based result accumulator to avoid O(n^2) rbind.
+#' @noRd
 .results_collector <- function(initial_results) {
   chunks <- list(initial_results)
   list(
