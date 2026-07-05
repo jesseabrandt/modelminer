@@ -175,3 +175,24 @@ test_that("extract_model() errors clearly on unsupported input", {
   expect_error(extract_model(1:5),
                "Cannot extract a model")
 })
+
+test_that("extract_model.default recovers a model from a plain list", {
+  # Forward-compatibility path: any list carrying a $model element (not a
+  # "mine" object) should still surrender its model.
+  m <- lm(mpg ~ wt, data = mtcars)
+  expect_identical(extract_model(list(model = m, extra = 1)), m)
+})
+
+# S3 accessors when the underlying model is absent -------------------------
+# validate_mine() explicitly permits $model = NULL (a refit can fail), so these
+# guard branches are reachable, not merely defensive.
+
+test_that("coef/predict/plot on a mine fit with no model error clearly", {
+  fit <- mine(mpg ~ wt, data = mtcars, verbose = FALSE,
+              max_degree = 1, max_interact_vars = 1)
+  fit$model <- NULL
+
+  expect_error(coef(fit),    "No fitted model")
+  expect_error(predict(fit), "No fitted model")
+  expect_error(plot(fit),    "No fitted model")
+})

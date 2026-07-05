@@ -3,6 +3,16 @@
 # `none` builds the engineered candidate pool (first-order + polynomials +
 # interactions) and fits the full generated formula, but runs NO search. The
 # returned object is a normal "mine" object minus the search trace.
+#
+# KNOWN PRE-EXISTING BUG (2026-07-05): every test in this file currently ERRORS
+# with "`trace` must be a data frame." method = "none" is broken at runtime.
+# Root cause: commit ccd04b5 added validate_mine(), which unconditionally
+# requires $trace to be a data.frame (R/mine.R ~L433), but the method = "none"
+# branch (R/mine.R ~L618) always returns all_models = NULL. So .build_mine() ->
+# validate_mine() rejects every "none" result and mine(..., method = "none")
+# can never succeed. The fix (allow a NULL/empty trace for "none") is deliberately
+# NOT applied here -- these tests already assert the intended behaviour and pin
+# the contract; they will pass once the source bug is fixed.
 
 test_that("method = 'none' returns a 'mine' object tagged 'none'", {
   fit <- mine(mpg ~ wt + hp + cyl, data = mtcars, method = "none",
