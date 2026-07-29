@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# deploy-hook — exolaunch palace SOFTWARE contract.
+#
+# modelminer is an R library, not a service: it ships this executable
+# deploy-hook and NO systemd unit, so the palace catalog installs it as
+# SOFTWARE (clone + hook, no service to stand up). palace-cd reruns this
+# hook on every deploy to keep the installed library current.
+#
+# The hook installs the package into R's default user library from the
+# clone at the repo root. modelminer is pure R (no src/), so no compiler
+# toolchain is needed; its one hard dependency (rlang) must already be
+# available in the target R library.
+set -euo pipefail
+
+cd "$(dirname "$0")"
+
+echo "deploy-hook: installing modelminer via R CMD INSTALL"
+R CMD INSTALL --no-multiarch --with-keep.source .
+echo "deploy-hook: modelminer installed"
