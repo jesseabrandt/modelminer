@@ -1,5 +1,29 @@
+# $ access on a "mine" object. Warns (once per session) when the deprecated
+# field names `Formula` / `all_models` are used and returns the value of the
+# stored field; all other access behaves like the default list `$`. The user-
+# facing deprecation is documented under ?mine ("Deprecated fields") and in
+# NEWS. Uses .subset2() to fetch the field without re-dispatching $.mine.
+#' @export
+"$.mine" <- function(x, name) {
+  if (identical(name, "Formula")) {
+    .deprecate_mine_field("Formula", "formula")
+  } else if (identical(name, "all_models")) {
+    .deprecate_mine_field("all_models", "trace")
+  }
+  .subset2(x, name)
+}
+
 #' @export
 print.mine <- function(x, ...) {
+  if (identical(x$method, "none")) {
+    cat("modelminer candidate generation (method = none, no search)\n",
+        "Call:              ", deparse1(x$call),    "\n",
+        "Formula:           ", deparse1(x$formula), "\n",
+        "Candidate terms:   ", length(x$candidate_terms), "\n",
+        "Full-model metric: ", format(x$best_metric), "\n",
+        sep = "")
+    return(invisible(x))
+  }
   cat("modelminer fit\n",
       "Call:    ", deparse1(x$call),  "\n",
       "Method:  ", x$method,           "\n",
@@ -20,13 +44,14 @@ summary.mine <- function(object, ...) {
                             })
   structure(
     list(
-      call          = object$call,
-      formula       = object$formula,
-      method        = object$method,
-      best_metric   = object$best_metric,
-      n_models      = nrow(object$trace),
-      model_summary = model_summary,
-      trace         = object$trace
+      call            = object$call,
+      formula         = object$formula,
+      method          = object$method,
+      best_metric     = object$best_metric,
+      n_models        = if (is.null(object$trace)) NA_integer_ else nrow(object$trace),
+      candidate_terms = object$candidate_terms,
+      model_summary   = model_summary,
+      trace           = object$trace
     ),
     class = "summary.mine"
   )
@@ -34,6 +59,17 @@ summary.mine <- function(object, ...) {
 
 #' @export
 print.summary.mine <- function(x, ...) {
+  if (identical(x$method, "none")) {
+    cat("modelminer candidate generation summary (method = none, no search)\n",
+        "Call:              ", deparse1(x$call),    "\n",
+        "Formula:           ", deparse1(x$formula), "\n",
+        "Candidate terms:   ", length(x$candidate_terms), "\n",
+        "Full-model metric: ", format(x$best_metric), "\n\n",
+        "-- Full model summary ------------------------------------\n",
+        sep = "")
+    if (!is.null(x$model_summary)) print(x$model_summary, ...)
+    return(invisible(x))
+  }
   cat("modelminer fit summary\n",
       "Call:    ", deparse1(x$call),    "\n",
       "Method:  ", x$method,             "\n",
@@ -47,10 +83,16 @@ print.summary.mine <- function(x, ...) {
 }
 
 #' @export
-coef.mine <- function(object, ...) stats::coef(object$model, ...)
+coef.mine <- function(object, ...) {
+  if (is.null(object$model))
+    stop("No fitted model to extract coefficients from.", call. = FALSE)
+  stats::coef(object$model, ...)
+}
 
 #' @export
 predict.mine <- function(object, newdata, ...) {
+  if (is.null(object$model))
+    stop("No fitted model to predict from.", call. = FALSE)
   if (missing(newdata))
     stats::predict(object$model, ...)
   else

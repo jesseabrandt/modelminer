@@ -296,3 +296,75 @@ test_that("extract_metric works as drop-in metric= argument for mine()", {
                      max_interact_vars = 1)
   expect_equal(deparse1(result$Formula), deparse1(result_aic$Formula))
 })
+
+
+# from_slot -------------------------------------------------------------------
+
+test_that("from_slot validates slot at construction time", {
+  expect_error(from_slot(""),       "non-empty string")
+  expect_error(from_slot(NULL),     "non-empty string")
+  expect_error(from_slot(c("a","b")), "non-empty string")
+  expect_error(from_slot(1),        "non-empty string")
+})
+
+test_that("from_slot validates column at construction time", {
+  expect_error(from_slot("x", column = 1),          "NULL or a single string")
+  expect_error(from_slot("x", column = c("a","b")), "NULL or a single string")
+})
+
+test_that("from_slot validates reduce at construction time", {
+  expect_error(from_slot("x", reduce = "min"), "NULL or a function")
+  expect_error(from_slot("x", reduce = 42),    "NULL or a function")
+})
+
+test_that("from_slot extracts a plain scalar slot", {
+  f <- from_slot("prediction.error")
+  expect_equal(f(mock_ranger), 0.234)
+})
+
+test_that("from_slot with reduce collapses a vector slot", {
+  f <- from_slot("cvm", reduce = min)
+  expect_equal(f(mock_cv_glmnet), 1.1)
+
+  f_max <- from_slot("cvm", reduce = max)
+  expect_equal(f_max(mock_cv_glmnet), 1.8)
+})
+
+test_that("from_slot with column + reduce extracts from matrix", {
+  f <- from_slot("err.rate", column = "OOB", reduce = min)
+  expect_equal(f(mock_rf_class), 0.15)
+})
+
+test_that("from_slot errors helpfully when slot is missing", {
+  f <- from_slot("not_a_slot")
+  expect_error(f(mock_ranger), "no slot named 'not_a_slot'")
+  expect_error(f(mock_ranger), "list_metrics")
+})
+
+test_that("from_slot errors when column requested on non-matrix slot", {
+  f <- from_slot("prediction.error", column = "OOB")
+  expect_error(f(mock_ranger), "is not a matrix")
+})
+
+test_that("from_slot errors when matrix column is missing", {
+  f <- from_slot("err.rate", column = "nonexistent")
+  expect_error(f(mock_rf_class), "no column named 'nonexistent'")
+  expect_error(f(mock_rf_class), "OOB")  # available columns surfaced
+})
+
+test_that("from_slot errors when result is not scalar (no reduce)", {
+  f <- from_slot("cvm")
+  expect_error(f(mock_cv_glmnet), "not a single number")
+  expect_error(f(mock_cv_glmnet), "reduce = min")
+})
+
+test_that("from_slot integrates with mine() via lm AIC slot", {
+  # lm has $rank as a scalar integer slot -- adequate to confirm integration
+  # without requiring optional packages. Lower rank == fewer terms, so this
+  # makes mine() prefer the intercept-only model.
+  result <- mine(mtcars, mpg,
+                 metric            = from_slot("rank"),
+                 max_degree        = 1,
+                 max_interact_vars = 1)
+  expect_s3_class(result$Formula, "formula")
+})

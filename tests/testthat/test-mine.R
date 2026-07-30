@@ -35,17 +35,30 @@ test_that("all three call forms agree on the selected formula", {
   expect_equal(deparse1(f1), deparse1(f3))
 })
 
-# Back-compat: legacy $Formula / $all_models fields are populated ------------
+# Deprecation: legacy $Formula / $all_models still work but warn -------------
 
-test_that("mine() object exposes both new and legacy field names", {
+test_that("legacy $Formula / $all_models are deprecated: warn once, mirror new", {
   fit <- mine(mtcars, mpg, verbose = FALSE,
               max_degree = 1, max_interact_vars = 1)
-  # new names
+
+  # Reset the once-per-session guard so this test is independent of whatever
+  # ran before it in the suite.
+  guard <- modelminer:::.mine_deprecated_env
+  rm(list = ls(envir = guard), envir = guard)
+
+  # First access of each old name warns, and returns the canonical value.
+  expect_warning(f_old  <- fit$Formula,    "deprecated")
+  expect_warning(am_old <- fit$all_models, "deprecated")
+  expect_identical(f_old,  fit$formula)
+  expect_identical(am_old, fit$trace)
+
+  # Warned at most once per session: a second access is silent.
+  expect_silent(fit$Formula)
+  expect_silent(fit$all_models)
+
+  # Canonical names are never affected.
   expect_s3_class(fit$formula, "formula")
   expect_s3_class(fit$trace, "data.frame")
-  # legacy names preserved for existing $-accessors
-  expect_identical(fit$Formula,    fit$formula)
-  expect_identical(fit$all_models, fit$trace)
 })
 
 # Constructor behaviour ------------------------------------------------------
@@ -161,4 +174,25 @@ test_that("extract_model() returns the fitted model from a mine fit", {
 test_that("extract_model() errors clearly on unsupported input", {
   expect_error(extract_model(1:5),
                "Cannot extract a model")
+})
+
+test_that("extract_model.default recovers a model from a plain list", {
+  # Forward-compatibility path: any list carrying a $model element (not a
+  # "mine" object) should still surrender its model.
+  m <- lm(mpg ~ wt, data = mtcars)
+  expect_identical(extract_model(list(model = m, extra = 1)), m)
+})
+
+# S3 accessors when the underlying model is absent -------------------------
+# validate_mine() explicitly permits $model = NULL (a refit can fail), so these
+# guard branches are reachable, not merely defensive.
+
+test_that("coef/predict/plot on a mine fit with no model error clearly", {
+  fit <- mine(mpg ~ wt, data = mtcars, verbose = FALSE,
+              max_degree = 1, max_interact_vars = 1)
+  fit$model <- NULL
+
+  expect_error(coef(fit),    "No fitted model")
+  expect_error(predict(fit), "No fitted model")
+  expect_error(plot(fit),    "No fitted model")
 })

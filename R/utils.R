@@ -1,5 +1,6 @@
 # Build a formula from a response variable name and a character vector of terms.
 # An empty terms vector produces response ~ 1 (intercept only).
+#' @noRd
 .build_formula <- function(response_str, terms) {
   if (length(terms) == 0) {
     stats::reformulate("1", response = response_str)
@@ -8,8 +9,51 @@
   }
 }
 
+# Build the engineered candidate-term pool from a set of predictors: the
+# first-order predictors themselves, plus I(var^k) polynomial terms (numeric
+# predictors only, degrees 2..max_degree), plus interaction terms over
+# combinations of 2..max_interact_vars predictors.
+#
+# Interaction terms are generated with : rather than *, so each candidate
+# represents only the interaction itself -- no implicit main effects. This
+# keeps the search strict: one term added or removed per step, and added_terms
+# bookkeeping in forward_backward stays unambiguous.
+#
+# The downside is that a:b without a and b already in the model is
+# statistically awkward (interaction without main effects). The stepwise search
+# relies on finding a and b first if they improve the metric (and
+# .eligible_candidates() enforces marginality); there is no enforcement here.
+#
+# Used by both the search path in .mine_impl() and method = "none", which
+# returns the pool directly without searching.
+.build_candidate_pool <- function(predictor_vars, numeric_vars,
+                                  max_degree, max_interact_vars) {
+  candidate_terms <- predictor_vars
+
+  if (max_degree >= 2) {
+    for (var in numeric_vars) {
+      for (degree in 2:max_degree) {
+        candidate_terms <- c(candidate_terms, paste0("I(", var, "^", degree, ")"))
+      }
+    }
+  }
+
+  if (max_interact_vars > 1 && length(predictor_vars) >= 2) {
+    max_k <- min(max_interact_vars, length(predictor_vars))
+    for (i in seq_len(max_k - 1)) {
+      interact_terms <- combn(predictor_vars, i + 1, function(vars) {
+        paste(vars, collapse = ":")
+      })
+      candidate_terms <- c(candidate_terms, interact_terms)
+    }
+  }
+
+  candidate_terms
+}
+
 # Extract the base variable from a polynomial term like "I(x^2)".
 # Returns NA_character_ for non-polynomial terms.
+#' @noRd
 .poly_base_var <- function(term) {
   m <- regmatches(term, regexec("^I\\((.+)\\^[0-9]+\\)$", term))[[1]]
   if (length(m) == 2L) m[2L] else NA_character_
@@ -18,6 +62,7 @@
 # Filter candidate terms so that polynomial terms I(var^k) are only included
 # when var is already a main-effect term in the current formula (marginality
 # principle).  Non-polynomial candidates pass through unchanged.
+#' @noRd
 .eligible_candidates <- function(candidate_terms, current_formula) {
   current_labels <- attr(stats::terms(current_formula), "term.labels")
   Filter(function(t) {
@@ -55,6 +100,7 @@ to_xy <- function(data, formula) {
 }
 
 # Tolerance-aware check: did new_metric improve over old_metric?
+#' @noRd
 .metric_improved <- function(new_metric, old_metric, metric_comparison) {
   best <- do.call(metric_comparison, list(old_metric, new_metric))
   if (is.numeric(best) && length(best) == 1L &&
@@ -66,6 +112,7 @@ to_xy <- function(data, formula) {
 }
 
 # Find index of best metric in a list, using tolerance for numerics.
+#' @noRd
 .find_best_index <- function(metrics, metric_comparison) {
   best <- do.call(metric_comparison, metrics)
   if (is.numeric(best) && length(best) == 1L) {
@@ -78,6 +125,7 @@ to_xy <- function(data, formula) {
 }
 
 # Try fitting a model and computing its metric. Returns list(metric=) or NULL.
+#' @noRd
 .try_fit_metric <- function(formula, model_func, metric, data,
                             term_label = "", direction = "", verbose = TRUE) {
   model <- tryCatch(
@@ -110,6 +158,7 @@ to_xy <- function(data, formula) {
 }
 
 # List-based result accumulator to avoid O(n^2) rbind.
+#' @noRd
 .results_collector <- function(initial_results) {
   chunks <- list(initial_results)
   list(

@@ -10,6 +10,7 @@
 # sum(choose(p, 1:k)), which is manageable for moderate p and small k.
 #
 # Returns list(Formula, all_models) matching the mine() contract.
+#' @noRd
 .mine_exhaustive <- function(candidate_terms, current_formula, current_metric,
                              results, model_func, metric, metric_comparison,
                              data, verbose = TRUE, response_str,

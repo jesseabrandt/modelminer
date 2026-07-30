@@ -76,9 +76,17 @@
 #'     \item \code{"lasso_path"} -- walks the full \code{glmnet()}
 #'       regularization path and records every model at which the selected
 #'       variable set changes (each variable entry/exit point). Produces a
-#'       richer \code{all_models} table than \code{"lasso"}. The best formula
+#'       richer \code{$trace} table than \code{"lasso"}. The best formula
 #'       is whichever optimizes the user's \code{metric}. Requires the
 #'       \pkg{glmnet} package.
+#'     \item \code{"none"} -- candidate generation only, \emph{no search}.
+#'       Builds the engineered candidate pool (first-order predictors +
+#'       \code{I(var^k)} polynomials up to \code{max_degree} + \code{:}
+#'       interactions up to \code{max_interact_vars}), fits the full generated
+#'       formula once, and returns. This is the escape hatch for users who
+#'       want modelminer's feature engineering but their own selection: take
+#'       \code{formula(fit)} or \code{fit$candidate_terms} and use it however
+#'       you like. The returned object has no search \code{$trace}; see Value.
 #'   }
 #'   May also be a custom search function -- see Details.
 #' @param max_terms Maximum number of terms to include in a subset for the
@@ -87,7 +95,7 @@
 #' @param lambda_rule For \code{method = "lasso"}: which lambda to use for
 #'   the selected formula. One of \code{"lambda.min"} (default, best CV
 #'   performance) or \code{"lambda.1se"} (sparser, within 1 SE of the
-#'   minimum). Both models appear in \code{all_models} regardless of this
+#'   minimum). Both models appear in \code{$trace} regardless of this
 #'   choice. Ignored by other methods.
 #' @param verbose If \code{TRUE} (the default), print progress messages
 #'   showing each model evaluated during the search. Set to \code{FALSE} to
@@ -114,17 +122,24 @@
 #' implementations for comparison via \code{\link{compare_methods}}.
 #'
 #' @returns An object of class \code{"mine"}: a list with the following
-#'   elements (old and new field names are both populated, so existing code
-#'   that indexes with \code{$Formula} / \code{$all_models} continues to
-#'   work):
+#'   elements:
 #'   \describe{
 #'     \item{\code{model}}{The fitted model object for the selected formula.}
 #'     \item{\code{formula}, \code{Formula}}{The selected formula.}
 #'     \item{\code{trace}, \code{all_models}}{A data frame of every formula
-#'       evaluated and its metric value.}
+#'       evaluated and its metric value. \code{NULL} for
+#'       \code{method = "none"}, which runs no search.}
 #'     \item{\code{best_metric}}{The metric value for the selected model as
-#'       a plain numeric scalar. \code{NA} when no metric drives selection
+#'       a plain numeric scalar. For \code{method = "none"} this is the metric
+#'       of the full generated model. \code{NA} when no metric drives selection
 #'       (see \code{\link{mine_lasso}}).}
+#'     \item{\code{candidate_terms}}{For \code{method = "none"}, the generated
+#'       candidate-term pool as a character vector (e.g.
+#'       \code{c("wt", "I(hp^2)", "wt:cyl")}); the same pool described by
+#'       \code{formula}. This is the complete generated pool -- every term that
+#'       could be considered -- independent of \code{keep_all_vars}. \code{NULL}
+#'       for the searching methods (which build and filter their pool internally
+#'       but do not return it).}
 #'     \item{\code{selector_fit}}{The underlying selection-engine fit, when the
 #'       method has one: a \code{cv.glmnet} object for \code{"lasso"}, a
 #'       \code{glmnet} object for \code{"lasso_path"}. \code{NULL} for stepwise
@@ -132,6 +147,11 @@
 #'     \item{\code{method}}{The search algorithm used.}
 #'     \item{\code{call}}{The matched call to \code{mine()}.}
 #'   }
+#'   \strong{Deprecated fields.} The legacy names \code{$Formula} (now
+#'   \code{$formula}) and \code{$all_models} (now \code{$trace}) are still
+#'   populated this release, but accessing them with \code{$} emits a
+#'   deprecation warning (once per session) and they will be removed in a
+#'   future version. Update old code to the canonical names above.
 #'   S3 methods are provided for \code{\link[base]{print}},
 #'   \code{\link[base]{summary}}, \code{\link[stats]{coef}},
 #'   \code{\link[stats]{predict}}, \code{\link[stats]{formula}}, and
@@ -149,6 +169,13 @@
 #'
 #' # Pipe-friendly: formula in slot 2 is auto-routed to mine.formula
 #' mtcars |> mine(mpg ~ wt + cyl, max_degree = 1, max_interact_vars = 1)
+#'
+#' # Escape hatch: generate the engineered candidate formula without searching,
+#' # then use it with your own modelling/selection workflow.
+#' gen <- mine(mpg ~ wt + hp, data = mtcars, method = "none",
+#'             max_degree = 2, max_interact_vars = 2)
+#' formula(gen)            # mpg ~ wt + hp + I(wt^2) + I(hp^2) + wt:hp
+#' gen$candidate_terms     # the same pool as a character vector
 #'
 #' @export
 #' @importFrom rlang enexpr as_string is_call caller_env
@@ -187,6 +214,7 @@ mine.formula <- function(x, data, model_func = lm,
 # by mine.data.frame's pipe branch; the caller supplies its own match.call()
 # so print()/summary() show the user's actual invocation rather than the
 # internal forwarding call.
+#' @noRd
 .mine_formula_body <- function(formula, data, model_func = lm,
                                max_degree = 3, max_interact_vars = 2,
                                metric = AIC, metric_comparison = min,
@@ -302,6 +330,7 @@ mine.data.frame <- function(x, response_var, model_func = lm,
 # Rewrite a match.call() from one of mine()'s methods so it looks like the
 # user's `mine(...)` invocation: drop the dispatch suffix, and either
 # relabel or drop the leading argument name so "x =" doesn't leak.
+#' @noRd
 .normalize_user_call <- function(call, formula_style) {
   call[[1L]] <- quote(mine)
   nms <- names(call)
@@ -318,6 +347,7 @@ mine.data.frame <- function(x, response_var, model_func = lm,
 # Same idea for the mine_*() wrappers: keep the wrapper name (it identifies
 # the search method) but strip the standard positional argument names so
 # print(fit) shows e.g. `mine_greedy(mtcars, mpg, variant = "greedy_alt")`.
+#' @noRd
 .normalize_wrapper_call <- function(call) {
   nms <- names(call)
   if (length(nms) >= 2L && nzchar(nms[2L]) && nms[2L] == "data") {
@@ -329,13 +359,110 @@ mine.data.frame <- function(x, response_var, model_func = lm,
   call
 }
 
-# Build the S3 "mine" object from a .mine_impl() result. Both old-style
-# fields ($Formula, $all_models) and new-style fields ($formula, $trace)
-# are populated so code written against either convention keeps working.
-# `call` should already be normalized for display; `data_expr` is the
-# user's data argument expression, used to rewrite the underlying model's
-# stored call so `summary(fit)` shows real information instead of the
-# internal `model_func(formula = result$Formula, data = data)` placeholder.
+# Per-session bookkeeping for the deprecated "mine" field names. Each old
+# name is warned about at most once per session (via $.mine) so that code
+# touching $Formula/$all_models inside a loop doesn't spam the console.
+.mine_deprecated_env <- new.env(parent = emptyenv())
+
+# Warn (once per session) that an old "mine" field name was accessed, pointing
+# the caller at its canonical replacement. Base-style deprecation -- no
+# lifecycle/rlang dependency. See [$.mine].
+#' @noRd
+.deprecate_mine_field <- function(old, new) {
+  if (isTRUE(.mine_deprecated_env[[old]])) return(invisible(NULL))
+  .mine_deprecated_env[[old]] <- TRUE
+  warning(
+    sprintf(
+      "`$%s` on a \"mine\" object is deprecated; use `$%s` instead. The old name is still populated this release but will be removed in a future version.",
+      old, new
+    ),
+    call. = FALSE
+  )
+}
+
+# Low-level constructor for the "mine" S3 class. The single place that knows
+# the object's field layout. Takes the canonical fields and derives the
+# deprecated aliases ($Formula, $all_models) from them, so the two can never
+# drift apart. `selector_fit` (the underlying lasso/lasso_path engine fit) and
+# `candidate_terms` (the generated pool for method = "none") default to NULL,
+# so methods that have neither omit them. Assumes its arguments already have
+# the right types -- callers go through validate_mine() (or .build_mine(),
+# which does) to enforce that.
+#' @noRd
+new_mine <- function(model, formula, trace, best_metric, method, call,
+                     selector_fit = NULL, candidate_terms = NULL) {
+  structure(
+    list(
+      model           = model,
+      formula         = formula,
+      method          = method,
+      best_metric     = best_metric,
+      selector_fit    = selector_fit,
+      trace           = trace,
+      candidate_terms = candidate_terms,
+      call            = call,
+      # Deprecated aliases, kept one more release; $.mine warns on access.
+      Formula         = formula,
+      all_models      = trace
+    ),
+    class = "mine"
+  )
+}
+
+# Validator for the "mine" S3 class. Checks the invariants every mine object
+# must satisfy and errors otherwise; returns the object invisibly on success.
+# Uses .subset2() to read the deprecated aliases so the check itself does not
+# trip $.mine's deprecation warning.
+#' @noRd
+validate_mine <- function(x) {
+  if (!inherits(x, "mine"))
+    stop("`x` is not a \"mine\" object.", call. = FALSE)
+
+  required <- c("model", "formula", "method", "best_metric", "trace", "call",
+                "Formula", "all_models")
+  missing <- setdiff(required, names(x))
+  if (length(missing))
+    stop("\"mine\" object is missing field(s): ",
+         paste(missing, collapse = ", "), ".", call. = FALSE)
+
+  formula <- .subset2(x, "formula")
+  if (!inherits(formula, "formula"))
+    stop("`formula` must be a formula.", call. = FALSE)
+
+  trace <- .subset2(x, "trace")
+  if (!is.data.frame(trace))
+    stop("`trace` must be a data frame.", call. = FALSE)
+
+  # best_metric is usually a numeric scalar, but invariant #1 ("any metric
+  # function") means a metric may return an arbitrary object -- so we only
+  # require the field be populated, not that it be numeric.
+  if (is.null(.subset2(x, "best_metric")))
+    stop("`best_metric` must be set (use NA_real_ when no metric drives ",
+         "selection).", call. = FALSE)
+
+  method <- .subset2(x, "method")
+  if (!is.character(method) || length(method) != 1L)
+    stop("`method` must be a length-1 character string.", call. = FALSE)
+
+  # $model may be NULL (the refit can fail) but otherwise must be a real object.
+  # The deprecated aliases must mirror their canonical fields exactly.
+  if (!identical(.subset2(x, "Formula"), formula))
+    stop("`Formula` must be identical to `formula`.", call. = FALSE)
+  if (!identical(.subset2(x, "all_models"), trace))
+    stop("`all_models` must be identical to `trace`.", call. = FALSE)
+
+  invisible(x)
+}
+
+# Build the S3 "mine" object from a .mine_impl() result. The canonical fields
+# are $formula and $trace. The legacy names $Formula and $all_models are still
+# populated for one more release (see NEWS) but are deprecated: $.mine warns
+# when they are accessed. `call` should already be normalized for display;
+# `data_expr` is the user's data argument expression, used to rewrite the
+# underlying model's stored call so `summary(fit)` shows real information
+# instead of the internal `model_func(formula = result$Formula, data = data)`
+# placeholder.
+#' @noRd
 .build_mine <- function(result, call, data_expr) {
   if (!is.null(result$model) && "call" %in% names(result$model)) {
     fn_expr <- call$model_func
@@ -345,26 +472,24 @@ mine.data.frame <- function(x, response_var, model_func = lm,
     )
   }
 
-  structure(
-    list(
-      model        = result$model,
-      formula      = result$Formula,
-      Formula      = result$Formula,
-      method       = result$method,
-      best_metric  = result$best_metric,
-      # Underlying selection-engine fit, when the method has one (cv.glmnet for
-      # "lasso", glmnet for "lasso_path"). NULL for stepwise methods.
-      selector_fit = result$selector_fit,
-      trace        = result$all_models,
-      all_models   = result$all_models,
-      call         = call
-    ),
-    class = "mine"
-  )
+  validate_mine(new_mine(
+    model           = result$model,
+    formula         = result$Formula,
+    trace           = result$all_models,
+    best_metric     = result$best_metric,
+    method          = result$method,
+    call            = call,
+    # Underlying selection-engine fit, when the method has one (cv.glmnet for
+    # "lasso", glmnet for "lasso_path"). NULL for stepwise methods. The
+    # generated candidate pool is carried for method = "none" (NULL otherwise).
+    selector_fit    = result$selector_fit,
+    candidate_terms = result$candidate_terms
+  ))
 }
 
 # Helper for the mine_*() wrappers: build a classed "mine" object from a
 # raw .mine_impl() result, preserving the wrapper's own call shape.
+#' @noRd
 .wrap_mine <- function(result, raw_call) {
   .build_mine(result,
               .normalize_wrapper_call(raw_call),
@@ -375,6 +500,7 @@ mine.data.frame <- function(x, response_var, model_func = lm,
 # unquoted symbol so it can be called via do.call() from compare_methods()
 # without fighting R's NSE rules. All other arguments match the user-facing
 # methods above.
+#' @noRd
 .mine_impl <- function(data, response_str, model_func = lm,
                        max_degree = 3, max_interact_vars = 2, metric = AIC,
                        metric_comparison = min, keep_all_vars = FALSE,
@@ -396,7 +522,8 @@ mine.data.frame <- function(x, response_var, model_func = lm,
                                    "greedy_alt", "greedy_alt_full",
                                    "greedy_alt_fb", "greedy_alt_full_fb",
                                    "forward_backward", "backward",
-                                   "exhaustive", "lasso", "lasso_path"))
+                                   "exhaustive", "lasso", "lasso_path",
+                                   "none"))
   }
 
   # ---- Shared setup: candidate term pool ----
@@ -417,7 +544,9 @@ mine.data.frame <- function(x, response_var, model_func = lm,
   # Small-n AIC warning. Skipped for method = "lasso": there AIC only scores
   # the refit, it does not drive selection (cross-validated lambda does), so a
   # warning about AIC's reliability for selection would mislead. "lasso_path"
-  # is not skipped -- there AIC genuinely picks among the path's models.
+  # is not skipped -- there AIC genuinely picks among the path's models. Fires
+  # for "none" too: that mode fits the full (over-parameterised) generated model
+  # and reports its AIC as best_metric, so AIC reliability is a real concern.
   if (identical(metric, AIC) && !(is.character(method) && identical(method, "lasso"))) {
     n <- nrow(data)
     p <- length(predictor_vars)
@@ -429,39 +558,69 @@ mine.data.frame <- function(x, response_var, model_func = lm,
     }
   }
 
-  candidate_terms <- predictor_vars
-
   # Only numeric variables can be raised to a power; factors are excluded.
   numeric_vars <- predictor_vars[
     sapply(predictor_vars, function(v) is.numeric(data[[v]]))
   ]
-  if (max_degree >= 2) {
-    for (var in numeric_vars) {
-      for (degree in 2:max_degree) {
-        candidate_terms <- c(candidate_terms, paste0("I(", var, "^", degree, ")"))
+
+  # Engineered candidate pool: first-order predictors + I(var^k) polynomials +
+  # `:` interactions. See .build_candidate_pool() for the `:`-vs-`*` rationale
+  # and the marginality caveat. The search methods consume this pool; method =
+  # "none" returns it directly.
+  candidate_terms <- .build_candidate_pool(predictor_vars, numeric_vars,
+                                           max_degree, max_interact_vars)
+
+  # ---- method = "none": candidate generation, no search --------------------
+  # Build the full generated formula, fit it once with model_func, and return.
+  # There is no search trace; the returned result carries the candidate-term
+  # vector so callers can surface it. Short-circuits before the starting-model
+  # fit and the argument-compatibility warnings, none of which apply here.
+  if (identical(method, "none")) {
+    full_formula <- .build_formula(response_str, candidate_terms)
+    # Call model_func with formula = by name, matching the search hot path
+    # (.try_fit_metric) so a custom model_func behaves identically under "none"
+    # and the searching methods.
+    model <- tryCatch(
+      model_func(formula = full_formula, data = data),
+      error = function(e) {
+        warning("method = 'none': could not fit the full generated model: ",
+                conditionMessage(e), call. = FALSE)
+        NULL
+      }
+    )
+    # The full generated model is deliberately saturated (every polynomial and
+    # interaction at once). Warn when it is rank-deficient so users don't read
+    # best_metric -- the in-sample metric of an over-parameterised fit -- as a
+    # model-quality or cross-method-comparable score.
+    if (!is.null(model)) {
+      rnk   <- tryCatch(model$rank, error = function(e) NULL)
+      ncoef <- tryCatch(length(stats::coef(model)), error = function(e) NULL)
+      if (is.numeric(rnk) && is.numeric(ncoef) &&
+          length(rnk) == 1L && length(ncoef) == 1L && rnk < ncoef) {
+        warning("method = 'none': the full generated model is rank-deficient (",
+                ncoef - rnk, " of ", ncoef, " coefficients not estimable). ",
+                "best_metric is the in-sample metric of this saturated fit and ",
+                "is not comparable to a searched model's metric.", call. = FALSE)
       }
     }
-  }
-
-  # Interaction terms are generated with : rather than *, so each candidate
-  # represents only the interaction itself -- no implicit main effects.
-  # This keeps the search strict: one term added or removed per step, and
-  # added_terms bookkeeping in forward_backward stays unambiguous.
-  #
-  # The downside is that a:b without a and b already in the model is
-  # statistically awkward (interaction without main effects). The current
-  # design relies on the search finding a and b first if they improve the
-  # metric, but there's no enforcement. A future improvement might be to
-  # require main effects as prerequisites before their interaction is offered
-  # as a candidate, or to group them and treat the whole family as one step.
-  if (max_interact_vars > 1 && length(predictor_vars) >= 2) {
-    max_k <- min(max_interact_vars, length(predictor_vars))
-    for (i in seq_len(max_k - 1)) {
-      interact_terms <- combn(predictor_vars, i + 1, function(vars) {
-        paste(vars, collapse = ":")
-      })
-      candidate_terms <- c(candidate_terms, interact_terms)
+    best_metric <- if (!is.null(model)) {
+      tryCatch(as.numeric(metric(model)), error = function(e) NA_real_)
+    } else {
+      NA_real_
     }
+    if (verbose) {
+      message("method = 'none': generated ", length(candidate_terms),
+              " candidate term(s); no search performed.")
+      message("Formula: ", deparse1(full_formula))
+    }
+    return(list(
+      Formula         = full_formula,
+      all_models      = NULL,
+      candidate_terms = candidate_terms,
+      model           = model,
+      best_metric     = best_metric,
+      method          = "none"
+    ))
   }
 
   # ---- Starting formula ----

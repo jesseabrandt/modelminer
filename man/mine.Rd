@@ -100,9 +100,17 @@ the formula. Defaults to \code{FALSE}.}
   \item \code{"lasso_path"} -- walks the full \code{glmnet()}
     regularization path and records every model at which the selected
     variable set changes (each variable entry/exit point). Produces a
-    richer \code{all_models} table than \code{"lasso"}. The best formula
+    richer \code{$trace} table than \code{"lasso"}. The best formula
     is whichever optimizes the user's \code{metric}. Requires the
     \pkg{glmnet} package.
+  \item \code{"none"} -- candidate generation only, \emph{no search}.
+    Builds the engineered candidate pool (first-order predictors +
+    \code{I(var^k)} polynomials up to \code{max_degree} + \code{:}
+    interactions up to \code{max_interact_vars}), fits the full generated
+    formula once, and returns. This is the escape hatch for users who
+    want modelminer's feature engineering but their own selection: take
+    \code{formula(fit)} or \code{fit$candidate_terms} and use it however
+    you like. The returned object has no search \code{$trace}; see Value.
 }
 May also be a custom search function -- see Details.}
 
@@ -113,7 +121,7 @@ methods.}
 \item{lambda_rule}{For \code{method = "lasso"}: which lambda to use for
 the selected formula. One of \code{"lambda.min"} (default, best CV
 performance) or \code{"lambda.1se"} (sparser, within 1 SE of the
-minimum). Both models appear in \code{all_models} regardless of this
+minimum). Both models appear in \code{$trace} regardless of this
 choice. Ignored by other methods.}
 
 \item{verbose}{If \code{TRUE} (the default), print progress messages
@@ -126,17 +134,24 @@ call is forwarded to \code{mine.formula}.}
 }
 \value{
 An object of class \code{"mine"}: a list with the following
-  elements (old and new field names are both populated, so existing code
-  that indexes with \code{$Formula} / \code{$all_models} continues to
-  work):
+  elements:
   \describe{
     \item{\code{model}}{The fitted model object for the selected formula.}
     \item{\code{formula}, \code{Formula}}{The selected formula.}
     \item{\code{trace}, \code{all_models}}{A data frame of every formula
-      evaluated and its metric value.}
+      evaluated and its metric value. \code{NULL} for
+      \code{method = "none"}, which runs no search.}
     \item{\code{best_metric}}{The metric value for the selected model as
-      a plain numeric scalar. \code{NA} when no metric drives selection
+      a plain numeric scalar. For \code{method = "none"} this is the metric
+      of the full generated model. \code{NA} when no metric drives selection
       (see \code{\link{mine_lasso}}).}
+    \item{\code{candidate_terms}}{For \code{method = "none"}, the generated
+      candidate-term pool as a character vector (e.g.
+      \code{c("wt", "I(hp^2)", "wt:cyl")}); the same pool described by
+      \code{formula}. This is the complete generated pool -- every term that
+      could be considered -- independent of \code{keep_all_vars}. \code{NULL}
+      for the searching methods (which build and filter their pool internally
+      but do not return it).}
     \item{\code{selector_fit}}{The underlying selection-engine fit, when the
       method has one: a \code{cv.glmnet} object for \code{"lasso"}, a
       \code{glmnet} object for \code{"lasso_path"}. \code{NULL} for stepwise
@@ -144,6 +159,11 @@ An object of class \code{"mine"}: a list with the following
     \item{\code{method}}{The search algorithm used.}
     \item{\code{call}}{The matched call to \code{mine()}.}
   }
+  \strong{Deprecated fields.} The legacy names \code{$Formula} (now
+  \code{$formula}) and \code{$all_models} (now \code{$trace}) are still
+  populated this release, but accessing them with \code{$} emits a
+  deprecation warning (once per session) and they will be removed in a
+  future version. Update old code to the canonical names above.
   S3 methods are provided for \code{\link[base]{print}},
   \code{\link[base]{summary}}, \code{\link[stats]{coef}},
   \code{\link[stats]{predict}}, \code{\link[stats]{formula}}, and
@@ -206,5 +226,12 @@ mine(mtcars, mpg, max_degree = 1, max_interact_vars = 1)
 
 # Pipe-friendly: formula in slot 2 is auto-routed to mine.formula
 mtcars |> mine(mpg ~ wt + cyl, max_degree = 1, max_interact_vars = 1)
+
+# Escape hatch: generate the engineered candidate formula without searching,
+# then use it with your own modelling/selection workflow.
+gen <- mine(mpg ~ wt + hp, data = mtcars, method = "none",
+            max_degree = 2, max_interact_vars = 2)
+formula(gen)            # mpg ~ wt + hp + I(wt^2) + I(hp^2) + wt:hp
+gen$candidate_terms     # the same pool as a character vector
 
 }

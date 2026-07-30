@@ -1,8 +1,9 @@
 # Tests for method-specific wrapper functions (mine_greedy, mine_lasso, etc.)
 
-# Wrappers return classed "mine" objects. Both new and legacy field names are
-# populated so existing code that indexed `$Formula` / `$all_models` keeps
-# working alongside `$formula` / `$trace`.
+# Wrappers return classed "mine" objects. The canonical fields are `$formula`
+# and `$trace`; the legacy `$Formula` / `$all_models` names are still populated
+# this release but deprecated (see ?mine and test-mine.R). This check confirms
+# the legacy names remain present in the object during the deprecation cycle.
 legacy_names <- c("Formula", "all_models", "model", "best_metric", "method")
 
 expect_mine_object <- function(result) {

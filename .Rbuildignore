@@ -1,5 +1,6 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
+^LICENSE\.md$
 ^CLAUDE\.md$
 ^TODO\.md$
 ^north_star\.md$
@@ -8,3 +9,5 @@
 ^\.DS_Store$
 ^\.positai$
 ^\.claude$
+^deploy-hook$
+^\.exolaunch\.json$

@@ -9,6 +9,7 @@
 3. **NSE at the boundary, not inside.** Public functions accept unquoted names. Internals use whatever representation is practical — the rule is that NSE doesn't leak inward.
 4. **Main stays CRAN-ready.** Feature work happens on branches. Main passes `R CMD check` at all times.
 5. **Variable selection, not hyperparameter tuning.** The package answers "which terms?"
+6. **Lambdas are escape hatches, not entry points.** Public APIs that accept a function argument (`metric`, `model_func`, `metric_comparison`, `method`) accept lambdas freely — that is what makes the package composable. But where a lambda is the common-case expression of a pattern, ship a named helper alongside it (`from_slot()` for slot extraction; `lm_loocv()` / `make_cv_metric()` for cross-validation; `make_cp_metric()` for Mallow's Cp). Functional internals; accessible UX. The R audience is not only programmers — non-programmers should not be forced through anonymous-function syntax to reach common metrics.
 
 ## Decision Tree
 
