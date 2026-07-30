@@ -1,0 +1,15 @@
+{
+  "format": "exolaunch-project",
+  "run": [
+    {
+      "id": "test",
+      "label": "run testthat suite",
+      "cmd": ["Rscript", "-e", "pkgload::load_all(quiet=TRUE); testthat::test_dir('tests/testthat', reporter='check')"]
+    },
+    {
+      "id": "document",
+      "label": "regenerate NAMESPACE + man/ (roxygen)",
+      "cmd": ["Rscript", "-e", "roxygen2::roxygenise()"]
+    }
+  ]
+}
